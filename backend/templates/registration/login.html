@@ -1,0 +1,7 @@
+<!doctype html>
+<html lang="ru">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Вход в кредитный кабинет</title>
+<style>body{font:16px system-ui;background:#f4f5f7;color:#202125;margin:0}main{max-width:420px;margin:10vh auto;background:white;padding:32px;border-radius:16px}h1{font-size:24px}label{display:block;margin:16px 0 6px}input{box-sizing:border-box;width:100%;padding:12px;border:1px solid #aaa;border-radius:8px;font:inherit}button{width:100%;padding:12px;background:#ef3124;color:white;border:0;border-radius:8px;font:inherit;margin-top:24px}a{color:#a72118}.errorlist{color:#a72118;padding-left:20px}p{line-height:1.5}</style></head>
+<body><main><h1>Кредитный кабинет · демо</h1><p>Войдите в сессию, чтобы выполнять запросы в Swagger. Используются синтетические данные.</p>
+<form method="post">{% csrf_token %}{{ form.as_p }}<input type="hidden" name="next" value="/api/docs/"><button type="submit">Войти и открыть Swagger</button></form>
+<p><a href="/api/docs/">Посмотреть документацию без входа</a></p></main></body></html>

@@ -1,0 +1,2556 @@
+openapi: 3.0.3
+info:
+  title: Умный кредитный кабинет предпринимателя
+  version: 1.0.0
+  description: 'Хакатонный backend: синтетические компании, локальные проверки, условная
+    подпись и моделируемая выдача. Деньги передаются строками в рублях, сроки — в
+    месяцах. Для Try it out [войдите в сессию](/api/session/login/) в той же вкладке.
+    Swagger передаёт session cookie и X-CSRFToken автоматически. Изменяющие действия
+    требуют актуальный lock_version из карточки заявки.'
+paths:
+  /api/v1/agreements/:
+    get:
+      operationId: v1_agreements_list
+      summary: Доступные демо-договоры
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - Договоры
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAgreementList'
+          description: ''
+  /api/v1/agreements/{id}/:
+    get:
+      operationId: v1_agreements_retrieve
+      summary: Зафиксированные условия и SHA-256
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Демо-договор.
+        required: true
+      tags:
+      - Договоры
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agreement'
+          description: ''
+  /api/v1/agreements/{id}/disburse/:
+    post:
+      operationId: v1_agreements_disburse_create
+      description: Только specialist. Денежных переводов нет. Один договор — одна
+        выдача; повторный ключ с другим договором даёт 409.
+      summary: Выполнить моделируемую выдачу
+      parameters:
+      - in: header
+        name: Idempotency-Key
+        schema:
+          type: string
+        description: UUID. Повтор того же ключа и договора возвращает ту же выдачу
+          даже при старом lock_version.
+        required: true
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Демо-договор.
+        required: true
+      tags:
+      - Выдачи
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VersionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VersionRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Disbursement'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+  /api/v1/agreements/{id}/sign/:
+    post:
+      operationId: v1_agreements_sign_create
+      description: Требует can_sign, document_hash и confirm_simulation=true. Юридически
+        значимая электронная подпись не выполняется.
+      summary: Условно подписать принятую версию договора
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Демо-договор.
+        required: true
+      tags:
+      - Договоры
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SignRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SignRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agreement'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+  /api/v1/applications/:
+    get:
+      operationId: v1_applications_list
+      summary: Заявки доступных компаний
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - accepted
+          - checking
+          - declined
+          - draft
+          - expired
+          - issued
+          - needs_info
+          - offered
+          - rejected
+          - review
+          - signed
+          - submitted
+      tags:
+      - Заявки
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedApplicationListList'
+          description: ''
+    post:
+      operationId: v1_applications_create
+      summary: Создать черновик
+      tags:
+      - Заявки
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApplicationCreateRequest'
+            examples:
+              Заявка:
+                value:
+                  company: 00000000-0000-0000-0000-000000000001
+                  product: 00000000-0000-0000-0000-000000000101
+                  amount: '1000000.00'
+                  term_months: 24
+                  purpose: Пополнение оборотных средств
+                  monthly_revenue: '1500000.00'
+                  monthly_expenses: '900000.00'
+                  monthly_debt_payments: '50000.00'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ApplicationCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ApplicationCreateRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+  /api/v1/applications/{id}/:
+    get:
+      operationId: v1_applications_retrieve
+      summary: Заявка со всеми ревизиями, проверками и решениями
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Кредитная заявка.
+        required: true
+      tags:
+      - Заявки
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+          description: ''
+    patch:
+      operationId: v1_applications_partial_update
+      summary: Изменить поля черновика
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Кредитная заявка.
+        required: true
+      tags:
+      - Заявки
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedDraftUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedDraftUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedDraftUpdateRequest'
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+  /api/v1/applications/{id}/events/:
+    get:
+      operationId: v1_applications_events_list
+      summary: История переходов заявки
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Кредитная заявка.
+        required: true
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - Заявки
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedEventList'
+          description: ''
+  /api/v1/applications/{id}/provide-information/:
+    post:
+      operationId: v1_applications_provide_information_create
+      summary: Ответить на уточнение новой ревизией
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Кредитная заявка.
+        required: true
+      tags:
+      - Заявки
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RevisionSubmitRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RevisionSubmitRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RevisionSubmitRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+  /api/v1/applications/{id}/retry-checks/:
+    post:
+      operationId: v1_applications_retry_checks_create
+      summary: Повторить проверку после технической ошибки
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Кредитная заявка.
+        required: true
+      tags:
+      - Заявки
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VersionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VersionRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+  /api/v1/applications/{id}/revise/:
+    post:
+      operationId: v1_applications_revise_create
+      description: Доступно из review/offered. Предыдущее предложение становится superseded,
+        проверки запускаются заново.
+      summary: Пересмотреть заявку новой ревизией
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Кредитная заявка.
+        required: true
+      tags:
+      - Заявки
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RevisionSubmitRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RevisionSubmitRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RevisionSubmitRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+  /api/v1/applications/{id}/submit/:
+    post:
+      operationId: v1_applications_submit_create
+      description: Требует can_submit. Возвращает review, needs_info или checking
+        с check.error; техническая ошибка не является отказом.
+      summary: Отправить заявку и выполнить локальные проверки
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Кредитная заявка.
+        required: true
+      tags:
+      - Заявки
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VersionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VersionRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+  /api/v1/calculator/payment/:
+    post:
+      operationId: v1_calculator_payment_create
+      description: 'Демо: равные месячные периоды, без комиссий. Итоговый последний
+        платёж корректирует округление. Не является кредитным предложением.'
+      summary: Предварительный аннуитетный расчёт
+      tags:
+      - Продукты
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRequestRequest'
+            examples:
+              Пример:
+                value:
+                  amount: '1000000.00'
+                  annual_rate: '18.0000'
+                  term_months: 24
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PaymentRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PaymentRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+          description: ''
+  /api/v1/companies/:
+    get:
+      operationId: v1_companies_list
+      summary: Доступные компании
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - Компании
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCompanyList'
+          description: ''
+  /api/v1/companies/{id}/:
+    get:
+      operationId: v1_companies_retrieve
+      summary: Профиль компании
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Компания.
+        required: true
+      tags:
+      - Компании
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Company'
+          description: ''
+  /api/v1/disbursements/:
+    get:
+      operationId: v1_disbursements_list
+      summary: История моделируемых выдач
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - Выдачи
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedDisbursementList'
+          description: ''
+  /api/v1/disbursements/{id}/:
+    get:
+      operationId: v1_disbursements_retrieve
+      summary: Результат моделируемой выдачи
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Моделируемая выдача.
+        required: true
+      tags:
+      - Выдачи
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Disbursement'
+          description: ''
+  /api/v1/health/:
+    get:
+      operationId: v1_health_retrieve
+      summary: Готовность сервиса и PostgreSQL
+      tags:
+      - Система
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+          description: ''
+  /api/v1/me/:
+    get:
+      operationId: v1_me_retrieve
+      summary: Текущий пользователь и его полномочия
+      tags:
+      - Сессия
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+  /api/v1/offers/:
+    get:
+      operationId: v1_offers_list
+      summary: Доступные предложения
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - Предложения
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedOfferList'
+          description: ''
+  /api/v1/offers/{id}/:
+    get:
+      operationId: v1_offers_retrieve
+      summary: Условия предложения и договор
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Предложение.
+        required: true
+      tags:
+      - Предложения
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Offer'
+          description: ''
+  /api/v1/offers/{id}/accept/:
+    post:
+      operationId: v1_offers_accept_create
+      summary: Принять предложение и сформировать демо-договор
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Предложение.
+        required: true
+      tags:
+      - Предложения
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VersionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VersionRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+  /api/v1/offers/{id}/decline/:
+    post:
+      operationId: v1_offers_decline_create
+      summary: Отклонить предложение
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Предложение.
+        required: true
+      tags:
+      - Предложения
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VersionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VersionRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+  /api/v1/products/:
+    get:
+      operationId: v1_products_list
+      summary: Демонстрационный каталог
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - Продукты
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedProductList'
+          description: ''
+  /api/v1/products/{id}/:
+    get:
+      operationId: v1_products_retrieve
+      summary: Условия демо-продукта
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Кредитный продукт (демо).
+        required: true
+      tags:
+      - Продукты
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: ''
+  /api/v1/session/csrf/:
+    get:
+      operationId: v1_session_csrf_retrieve
+      summary: Получить CSRF-токен и cookie
+      tags:
+      - Сессия
+      security:
+      - cookieAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Csrf'
+          description: ''
+  /api/v1/session/login/:
+    post:
+      operationId: v1_session_login_create
+      description: Сначала GET /session/csrf/, затем передайте X-CSRFToken. Вход вращает
+        токен; используйте новый из ответа.
+      summary: 'Войти: session cookie + CSRF'
+      tags:
+      - Сессия
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LoginRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LoginRequestRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+          description: ''
+  /api/v1/session/logout/:
+    post:
+      operationId: v1_session_logout_create
+      summary: Завершить сессию
+      tags:
+      - Сессия
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/staff/applications/:
+    get:
+      operationId: v1_staff_applications_list
+      summary: Очередь специалиста
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - accepted
+          - checking
+          - declined
+          - draft
+          - expired
+          - issued
+          - needs_info
+          - offered
+          - rejected
+          - review
+          - signed
+          - submitted
+      tags:
+      - Банк
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedApplicationListList'
+          description: ''
+  /api/v1/staff/applications/{id}/:
+    get:
+      operationId: v1_staff_applications_retrieve
+      summary: Карточка специалиста
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Кредитная заявка.
+        required: true
+      tags:
+      - Банк
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+          description: ''
+  /api/v1/staff/applications/{id}/decide/:
+    post:
+      operationId: v1_staff_applications_decide_create
+      description: 'Только specialist. Сервер использует сохранённую оценку текущей
+        ревизии: одобрение, уменьшенная сумма или отказ. Ставку и решение нельзя назначить
+        в теле запроса.'
+      summary: Принять решение по демонстрационной политике
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Кредитная заявка.
+        required: true
+      tags:
+      - Банк
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VersionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VersionRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+  /api/v1/staff/applications/{id}/request-information/:
+    post:
+      operationId: v1_staff_applications_request_information_create
+      summary: Запросить уточнение у компании
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Кредитная заявка.
+        required: true
+      tags:
+      - Банк
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InformationRequestInputRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/InformationRequestInputRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/InformationRequestInputRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+components:
+  schemas:
+    Agreement:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        offer:
+          type: string
+          format: uuid
+          readOnly: true
+        number:
+          type: string
+          readOnly: true
+          title: Номер демо-договора
+        terms_snapshot:
+          readOnly: true
+          title: Зафиксированные условия (v1)
+        document_hash:
+          type: string
+          readOnly: true
+          title: SHA-256 условий
+        signed_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        signed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          title: Условно подписан
+        signature_mode:
+          type: string
+          readOnly: true
+          title: Способ подписи
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Создано
+        disbursement:
+          allOf:
+          - $ref: '#/components/schemas/Disbursement'
+          readOnly: true
+          nullable: true
+      required:
+      - created_at
+      - disbursement
+      - document_hash
+      - id
+      - number
+      - offer
+      - signature_mode
+      - signed_at
+      - signed_by
+      - terms_snapshot
+    Application:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        company:
+          type: string
+          format: uuid
+          readOnly: true
+        company_name:
+          type: string
+          readOnly: true
+        created_by:
+          type: string
+          format: uuid
+          readOnly: true
+        product:
+          type: string
+          format: uuid
+          readOnly: true
+        product_name:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ApplicationStatusEnum'
+          readOnly: true
+          title: Состояние
+        lock_version:
+          type: integer
+          readOnly: true
+          title: Версия для конкурентных изменений
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Создано
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Изменена
+        revisions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Revision'
+          readOnly: true
+      required:
+      - company
+      - company_name
+      - created_at
+      - created_by
+      - id
+      - lock_version
+      - product
+      - product_name
+      - revisions
+      - status
+      - updated_at
+    ApplicationCreateRequest:
+      type: object
+      description: Reject extra fields instead of silently dropping status/rate/role
+        injection.
+      properties:
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          description: Рубли, десятичная строка.
+        term_months:
+          type: integer
+          maximum: 120
+          minimum: 1
+        purpose:
+          type: string
+          minLength: 1
+          maxLength: 500
+        monthly_revenue:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          nullable: true
+        monthly_expenses:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          nullable: true
+        monthly_debt_payments:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          nullable: true
+        company:
+          type: string
+          format: uuid
+        product:
+          type: string
+          format: uuid
+      required:
+      - amount
+      - company
+      - product
+      - purpose
+      - term_months
+    ApplicationList:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        company:
+          type: string
+          format: uuid
+          readOnly: true
+        company_name:
+          type: string
+          readOnly: true
+        created_by:
+          type: string
+          format: uuid
+          readOnly: true
+        product:
+          type: string
+          format: uuid
+          readOnly: true
+        product_name:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ApplicationStatusEnum'
+          readOnly: true
+          title: Состояние
+        lock_version:
+          type: integer
+          readOnly: true
+          title: Версия для конкурентных изменений
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Создано
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Изменена
+      required:
+      - company
+      - company_name
+      - created_at
+      - created_by
+      - id
+      - lock_version
+      - product
+      - product_name
+      - status
+      - updated_at
+    ApplicationStatusEnum:
+      enum:
+      - draft
+      - submitted
+      - checking
+      - review
+      - needs_info
+      - offered
+      - accepted
+      - signed
+      - issued
+      - rejected
+      - declined
+      - expired
+      type: string
+      description: |-
+        * `draft` - Черновик
+        * `submitted` - Отправлена
+        * `checking` - Выполняются проверки
+        * `review` - Рассмотрение специалистом
+        * `needs_info` - Нужно уточнение
+        * `offered` - Есть предложение
+        * `accepted` - Предложение принято
+        * `signed` - Условно подписана
+        * `issued` - Моделируемая выдача выполнена
+        * `rejected` - Отказ
+        * `declined` - Клиент отклонил
+        * `expired` - Срок предложения истёк
+    Assessment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        score:
+          type: integer
+          readOnly: true
+          title: Демо-скор
+        risk_level:
+          allOf:
+          - $ref: '#/components/schemas/RiskLevelEnum'
+          readOnly: true
+          title: Риск
+        factors:
+          readOnly: true
+          title: Факторы оценки (v1)
+        rules_version:
+          type: string
+          readOnly: true
+          title: Версия скоринга
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Создано
+        decision:
+          allOf:
+          - $ref: '#/components/schemas/CreditDecision'
+          readOnly: true
+          nullable: true
+      required:
+      - created_at
+      - decision
+      - factors
+      - id
+      - risk_level
+      - rules_version
+      - score
+    Check:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/CheckKindEnum'
+          readOnly: true
+          title: Тип
+        status:
+          allOf:
+          - $ref: '#/components/schemas/CheckStatusEnum'
+          readOnly: true
+          title: Результат
+        attempt:
+          type: integer
+          readOnly: true
+          title: Попытка
+        result:
+          readOnly: true
+          title: Результат адаптера (v1)
+        source:
+          type: string
+          readOnly: true
+          title: Источник
+        is_mock:
+          type: boolean
+          readOnly: true
+          title: Локальный мок
+        checked_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Проверено
+      required:
+      - attempt
+      - checked_at
+      - id
+      - is_mock
+      - kind
+      - result
+      - source
+      - status
+    CheckKindEnum:
+      enum:
+      - registry
+      - credit_history
+      - financial
+      type: string
+      description: |-
+        * `registry` - Регистрационный статус
+        * `credit_history` - Кредитная история
+        * `financial` - Финансовые данные
+    CheckStatusEnum:
+      enum:
+      - passed
+      - failed
+      - missing
+      - error
+      type: string
+      description: |-
+        * `passed` - Проверка пройдена
+        * `failed` - Негативный результат
+        * `missing` - Недостаточно данных
+        * `error` - Техническая ошибка
+    Company:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        inn:
+          type: string
+          readOnly: true
+          title: Синтетический ИНН
+        name:
+          type: string
+          readOnly: true
+          title: Название
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/CompanyKindEnum'
+          readOnly: true
+          title: Тип
+        registered_at:
+          type: string
+          format: date
+          readOnly: true
+          title: Дата регистрации
+        status:
+          allOf:
+          - $ref: '#/components/schemas/CompanyStatusEnum'
+          readOnly: true
+          title: Статус
+        is_existing_client:
+          type: boolean
+          readOnly: true
+          title: Действующий клиент банка
+        demo_scenario:
+          allOf:
+          - $ref: '#/components/schemas/DemoScenarioEnum'
+          readOnly: true
+          title: Сценарий локального мока
+      required:
+      - demo_scenario
+      - id
+      - inn
+      - is_existing_client
+      - kind
+      - name
+      - registered_at
+      - status
+    CompanyKindEnum:
+      enum:
+      - ip
+      - legal
+      type: string
+      description: |-
+        * `ip` - Индивидуальный предприниматель
+        * `legal` - Юридическое лицо
+    CompanyStatusEnum:
+      enum:
+      - active
+      - inactive
+      type: string
+      description: |-
+        * `active` - Действует
+        * `inactive` - Деятельность прекращена
+    CreditDecision:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        outcome:
+          allOf:
+          - $ref: '#/components/schemas/OutcomeEnum'
+          readOnly: true
+          title: Решение
+        reason_code:
+          type: string
+          readOnly: true
+          title: Код причины
+        explanation:
+          type: string
+          readOnly: true
+          title: Объяснение
+        decided_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        policy_version:
+          type: string
+          readOnly: true
+          title: Версия кредитной политики
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Создано
+        offer:
+          allOf:
+          - $ref: '#/components/schemas/Offer'
+          readOnly: true
+          nullable: true
+      required:
+      - created_at
+      - decided_by
+      - explanation
+      - id
+      - offer
+      - outcome
+      - policy_version
+      - reason_code
+    Csrf:
+      type: object
+      properties:
+        csrf_token:
+          type: string
+      required:
+      - csrf_token
+    DemoScenarioEnum:
+      enum:
+      - standard
+      - check_error
+      - bad_history
+      type: string
+      description: |-
+        * `standard` - Стандартный
+        * `check_error` - Ошибка регистрационной проверки
+        * `bad_history` - Негативная кредитная история
+    Disbursement:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        agreement:
+          type: string
+          format: uuid
+          readOnly: true
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          readOnly: true
+          title: Моделируемая сумма выдачи, ₽
+        status:
+          type: string
+          readOnly: true
+          title: Состояние
+        idempotency_key:
+          type: string
+          format: uuid
+          readOnly: true
+          title: Ключ идемпотентности
+        issued_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Моделируемая выдача
+        is_simulated:
+          type: boolean
+          readOnly: true
+      required:
+      - agreement
+      - amount
+      - id
+      - idempotency_key
+      - is_simulated
+      - issued_at
+      - status
+    Error:
+      type: object
+      properties:
+        detail:
+          type: string
+          description: Описание ошибки. При валидации ответ содержит ошибки по именам
+            полей.
+      required:
+      - detail
+    Event:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        actor:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        event_type:
+          type: string
+          readOnly: true
+          title: Событие
+        from_status:
+          type: string
+          readOnly: true
+        to_status:
+          type: string
+          readOnly: true
+        details:
+          readOnly: true
+          title: Безопасные сведения (v1)
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Создано
+      required:
+      - actor
+      - created_at
+      - details
+      - event_type
+      - from_status
+      - id
+      - to_status
+    Health:
+      type: object
+      properties:
+        status:
+          type: string
+        database:
+          type: string
+      required:
+      - database
+      - status
+    InformationRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        question:
+          type: string
+          readOnly: true
+          title: Запрошенные сведения
+        requested_by:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Создано
+        response_revision:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        responded_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - created_at
+      - id
+      - question
+      - requested_by
+      - responded_at
+      - response_revision
+    InformationRequestInputRequest:
+      type: object
+      description: Reject extra fields instead of silently dropping status/rate/role
+        injection.
+      properties:
+        lock_version:
+          type: integer
+          minimum: 0
+          description: Актуальное значение из GET заявки.
+        question:
+          type: string
+          minLength: 1
+          maxLength: 1000
+      required:
+      - lock_version
+      - question
+    LoginRequestRequest:
+      type: object
+      description: Reject extra fields instead of silently dropping status/rate/role
+        injection.
+      properties:
+        username:
+          type: string
+          minLength: 1
+          maxLength: 150
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+          maxLength: 256
+      required:
+      - password
+      - username
+    LoginResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        csrf_token:
+          type: string
+          description: Обновлённый CSRF-токен после входа.
+      required:
+      - csrf_token
+      - user
+    Member:
+      type: object
+      properties:
+        company:
+          type: string
+          format: uuid
+          readOnly: true
+        role:
+          allOf:
+          - $ref: '#/components/schemas/RoleEnum'
+          readOnly: true
+          title: Роль в компании
+        can_submit:
+          type: boolean
+          readOnly: true
+          title: Может отправлять заявки
+        can_sign:
+          type: boolean
+          readOnly: true
+          title: Может условно подписывать договор
+        active:
+          type: boolean
+          readOnly: true
+          title: Действующее членство
+      required:
+      - active
+      - can_sign
+      - can_submit
+      - company
+      - role
+    Offer:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        application_id:
+          type: string
+          format: uuid
+          readOnly: true
+        decision:
+          type: string
+          format: uuid
+          readOnly: true
+        product:
+          type: string
+          format: uuid
+          readOnly: true
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          readOnly: true
+          title: Сумма, ₽
+        annual_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,4})?$
+          readOnly: true
+          title: Годовая ставка, %
+        term_months:
+          type: integer
+          readOnly: true
+          title: Срок, месяцев
+        monthly_payment:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          readOnly: true
+          title: Регулярный платёж, ₽
+        schedule:
+          readOnly: true
+          title: Упрощённый график по номерам месяцев (v1)
+        status:
+          allOf:
+          - $ref: '#/components/schemas/OfferStatusEnum'
+          readOnly: true
+          title: Состояние
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Принять до
+        accepted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        sign_before:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          title: Условно подписать до
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Создано
+        agreement:
+          allOf:
+          - $ref: '#/components/schemas/Agreement'
+          readOnly: true
+          nullable: true
+      required:
+      - accepted_at
+      - agreement
+      - amount
+      - annual_rate
+      - application_id
+      - created_at
+      - decision
+      - expires_at
+      - id
+      - monthly_payment
+      - product
+      - schedule
+      - sign_before
+      - status
+      - term_months
+    OfferStatusEnum:
+      enum:
+      - available
+      - accepted
+      - declined
+      - expired
+      - superseded
+      type: string
+      description: |-
+        * `available` - Доступно
+        * `accepted` - Принято
+        * `declined` - Отклонено
+        * `expired` - Истекло
+        * `superseded` - Заменено новой ревизией
+    OutcomeEnum:
+      enum:
+      - approved
+      - counteroffer
+      - rejected
+      type: string
+      description: |-
+        * `approved` - Одобрение
+        * `counteroffer` - Встречные условия
+        * `rejected` - Отказ
+    PaginatedAgreementList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Agreement'
+    PaginatedApplicationListList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApplicationList'
+    PaginatedCompanyList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Company'
+    PaginatedDisbursementList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Disbursement'
+    PaginatedEventList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Event'
+    PaginatedOfferList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Offer'
+    PaginatedProductList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Product'
+    PatchedDraftUpdateRequest:
+      type: object
+      description: Reject extra fields instead of silently dropping status/rate/role
+        injection.
+      properties:
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+        term_months:
+          type: integer
+          maximum: 120
+          minimum: 1
+        purpose:
+          type: string
+          minLength: 1
+          maxLength: 500
+        monthly_revenue:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          nullable: true
+        monthly_expenses:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          nullable: true
+        monthly_debt_payments:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          nullable: true
+        lock_version:
+          type: integer
+          minimum: 0
+    PaymentRequestRequest:
+      type: object
+      description: Reject extra fields instead of silently dropping status/rate/role
+        injection.
+      properties:
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+        annual_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,4})?$
+        term_months:
+          type: integer
+          maximum: 120
+          minimum: 1
+      required:
+      - amount
+      - annual_rate
+      - term_months
+    PaymentResponse:
+      type: object
+      properties:
+        monthly_payment:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+        schedule:
+          description: 'График v1: месяц, платёж, основной долг, проценты, остаток;
+            без комиссий.'
+      required:
+      - monthly_payment
+      - schedule
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        code:
+          type: string
+          readOnly: true
+          title: Код
+          pattern: ^[-a-zA-Z0-9_]+$
+        name:
+          type: string
+          readOnly: true
+          title: Название
+        description:
+          type: string
+          readOnly: true
+          title: Описание
+        min_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          readOnly: true
+          title: Минимальная сумма, ₽
+        max_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          readOnly: true
+          title: Максимальная сумма, ₽
+        min_term_months:
+          type: integer
+          readOnly: true
+          title: Минимальный срок
+        max_term_months:
+          type: integer
+          readOnly: true
+          title: Максимальный срок
+        annual_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,4})?$
+          readOnly: true
+          title: Демонстрационная годовая ставка, %
+        rules_version:
+          type: string
+          readOnly: true
+          title: Версия правил
+        active:
+          type: boolean
+          readOnly: true
+          title: Доступен для заявок
+      required:
+      - active
+      - annual_rate
+      - code
+      - description
+      - id
+      - max_amount
+      - max_term_months
+      - min_amount
+      - min_term_months
+      - name
+      - rules_version
+    Revision:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        revision_no:
+          type: integer
+          readOnly: true
+          title: Номер ревизии
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          readOnly: true
+          title: Запрошенная сумма, ₽
+        term_months:
+          type: integer
+          readOnly: true
+          title: Срок, месяцев
+        purpose:
+          type: string
+          readOnly: true
+          title: Назначение
+        monthly_revenue:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
+          title: Месячная выручка, ₽
+        monthly_expenses:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
+          title: Месячные расходы, ₽
+        monthly_debt_payments:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
+          title: Месячные платежи по обязательствам, ₽
+        input_snapshot:
+          readOnly: true
+          title: Снимок компании, продукта и входных данных (v1)
+        submitted_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          title: Отправлена
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Создано
+        checks:
+          type: array
+          items:
+            $ref: '#/components/schemas/Check'
+          readOnly: true
+        assessment:
+          allOf:
+          - $ref: '#/components/schemas/Assessment'
+          readOnly: true
+          nullable: true
+        information_requests:
+          type: array
+          items:
+            $ref: '#/components/schemas/InformationRequest'
+          readOnly: true
+      required:
+      - amount
+      - assessment
+      - checks
+      - created_at
+      - id
+      - information_requests
+      - input_snapshot
+      - monthly_debt_payments
+      - monthly_expenses
+      - monthly_revenue
+      - purpose
+      - revision_no
+      - submitted_at
+      - term_months
+    RevisionSubmitRequest:
+      type: object
+      description: Reject extra fields instead of silently dropping status/rate/role
+        injection.
+      properties:
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          description: Рубли, десятичная строка.
+        term_months:
+          type: integer
+          maximum: 120
+          minimum: 1
+        purpose:
+          type: string
+          minLength: 1
+          maxLength: 500
+        monthly_revenue:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          nullable: true
+        monthly_expenses:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          nullable: true
+        monthly_debt_payments:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          nullable: true
+        lock_version:
+          type: integer
+          minimum: 0
+      required:
+      - amount
+      - lock_version
+      - purpose
+      - term_months
+    RiskLevelEnum:
+      enum:
+      - low
+      - medium
+      - high
+      type: string
+      description: |-
+        * `low` - Низкий
+        * `medium` - Средний
+        * `high` - Высокий
+    RoleEnum:
+      enum:
+      - owner
+      - director
+      - accountant
+      type: string
+      description: |-
+        * `owner` - Собственник
+        * `director` - Директор
+        * `accountant` - Бухгалтер
+    SignRequestRequest:
+      type: object
+      description: Reject extra fields instead of silently dropping status/rate/role
+        injection.
+      properties:
+        lock_version:
+          type: integer
+          minimum: 0
+          description: Актуальное значение из GET заявки.
+        document_hash:
+          type: string
+          minLength: 1
+          description: SHA-256 условий из GET договора.
+          pattern: ^[0-9a-f]{64}$
+        confirm_simulation:
+          type: boolean
+          description: Явное подтверждение условной подписи.
+      required:
+      - confirm_simulation
+      - document_hash
+      - lock_version
+    SystemRoleEnum:
+      enum:
+      - client
+      - specialist
+      type: string
+      description: |-
+        * `client` - Представитель компании
+        * `specialist` - Кредитный специалист
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        username:
+          type: string
+          readOnly: true
+          title: Имя пользователя
+          description: Обязательное поле. Не более 150 символов. Только буквы, цифры
+            и символы @/./+/-/_.
+        first_name:
+          type: string
+          readOnly: true
+          title: Имя
+        last_name:
+          type: string
+          readOnly: true
+          title: Фамилия
+        system_role:
+          allOf:
+          - $ref: '#/components/schemas/SystemRoleEnum'
+          readOnly: true
+          title: Системная роль
+        memberships:
+          type: array
+          items:
+            $ref: '#/components/schemas/Member'
+          readOnly: true
+      required:
+      - first_name
+      - id
+      - last_name
+      - memberships
+      - system_role
+      - username
+    VersionRequest:
+      type: object
+      description: Reject extra fields instead of silently dropping status/rate/role
+        injection.
+      properties:
+        lock_version:
+          type: integer
+          minimum: 0
+          description: Актуальное значение из GET заявки.
+      required:
+      - lock_version
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: sessionid

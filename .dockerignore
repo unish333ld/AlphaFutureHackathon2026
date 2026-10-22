@@ -1,0 +1,12 @@
+.git
+.env
+.env.*
+.venv
+.repowise
+skills
+**/__pycache__
+.pytest_cache
+.ruff_cache
+backend/staticfiles
+docs
+.DS_Store
