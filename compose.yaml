@@ -23,7 +23,7 @@ services:
       DB_PORT: "5432"
       DJANGO_DEBUG: "false"
     ports:
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:${WEB_PORT:-8000}:8000"
     depends_on:
       db:
         condition: service_healthy

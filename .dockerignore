@@ -7,6 +7,9 @@ skills
 **/__pycache__
 .pytest_cache
 .ruff_cache
+.coverage
+htmlcov
+reports
 backend/staticfiles
 docs
 .DS_Store

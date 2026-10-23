@@ -4,6 +4,19 @@ pythonpath = ["backend"]
 testpaths = ["backend/tests"]
 addopts = "-q"
 
+[tool.coverage.run]
+source = ["backend"]
+branch = true
+omit = ["*/migrations/*", "*/tests/*", "backend/manage.py", "backend/config/wsgi.py"]
+
+[tool.coverage.report]
+show_missing = true
+precision = 2
+fail_under = 95
+
+[tool.coverage.html]
+directory = "htmlcov"
+
 [tool.ruff]
 target-version = "py314"
 line-length = 100

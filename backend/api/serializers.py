@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from rest_framework import serializers
+from rest_framework.settings import api_settings
 
 from accounts.models import User
 from agreements.models import Agreement, Disbursement
@@ -22,7 +23,9 @@ class StrictSerializer(serializers.Serializer):
 
     def to_internal_value(self, data):
         if not isinstance(data, dict):
-            raise serializers.ValidationError("Ожидается JSON-объект.")
+            raise serializers.ValidationError(
+                {api_settings.NON_FIELD_ERRORS_KEY: ["Ожидается JSON-объект."]}
+            )
         unknown = set(data) - set(self.fields)
         if unknown:
             raise serializers.ValidationError(

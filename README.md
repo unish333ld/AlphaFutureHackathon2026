@@ -13,7 +13,7 @@ cp .env.example .env
 В `.env` задайте `DJANGO_SECRET_KEY` (случайная строка от 50 символов), `DB_PASSWORD` и `DEMO_PASSWORD` (от 12 символов). Для генерации ключа: `python3 -c 'import secrets; print(secrets.token_urlsafe(64))'`. `.env` игнорируется Git. Остальные настройки подходят для локального запуска.
 
 ```sh
-docker compose up --build -d
+docker compose up --build -d --wait --wait-timeout 120
 docker compose logs -f web
 ```
 
@@ -25,6 +25,8 @@ docker compose logs -f web
 - OpenAPI: http://localhost:8000/api/schema/
 - Проверка готовности: http://localhost:8000/api/v1/health/
 - Django Admin: http://localhost:8000/admin/ (администратор создаётся отдельно).
+
+Если порт 8000 занят, задайте `WEB_PORT`, например `WEB_PORT=18000 docker compose -p alfa-credit-demo up --build -d --wait --wait-timeout 120`. Подробный [сценарий демонстрации backend](docs/backend-demo.md) содержит проверенный запуск на 18000 и команды автоматической проверки через HTTP.
 
 Пользователи `client`, `specialist`, `accountant`, `outsider` получают пароль из `DEMO_PASSWORD`. Специалист не является superuser. Для **Try it out** войдите через страницу входа в той же вкладке: cookie сессии и CSRF передаются автоматически. Поле Authorize для cookie заполнять не нужно. Для смены роли вызовите `POST /api/v1/session/logout/`, откройте страницу входа и обновите Swagger.
 
@@ -79,7 +81,16 @@ python3 -m venv .venv
 .venv/bin/ruff format --check backend
 ```
 
-В контейнере: `docker compose exec web pytest -c /app/pyproject.toml`. Истечение предложений обрабатывается при чтении карточки/предложения и командой `python manage.py expire_offers`. Новые данные после рассмотрения отправляются через `/revise/`, ответ на уточнение — через `/provide-information/`. Seeds идемпотентны. `seed_demo --reset-passwords` обновляет пароли только четырёх демо-пользователей.
+Для полного QA-прогона с измерением строк и ветвей установите дополнительные тестовые зависимости. Выполняйте команды из корня проекта:
+
+```sh
+.venv/bin/python -m pip install -r backend/requirements-test.lock
+.venv/bin/pytest --cov --cov-report=term-missing --cov-report=html --cov-report=json:reports/coverage.json --cov-report=xml:reports/coverage.xml --junitxml=reports/junit.xml
+```
+
+HTML-отчёт: `htmlcov/index.html`. Порог покрытия — 95% по общей метрике строк и ветвей; более низкое значение завершает прогон ошибкой. Сгенерированные отчёты игнорируются Git. Считается код backend, включая API, сервисы, модели, Admin, настройки и команды; исключены сами тесты, миграции и точки запуска `manage.py`/`wsgi.py`. Тестовая БД создаётся из миграций и удаляется после прогона. HTTP-тест запускает временный локальный сервер; тесты гонок используют независимые PostgreSQL-соединения. Результаты и найденный дефект: [docs/verification.md](docs/verification.md).
+
+В контейнере базовый набор: `docker compose exec web pytest -c /app/pyproject.toml`. Инструменты покрытия устанавливаются отдельно из `requirements-test.lock`. Истечение предложений обрабатывается при чтении карточки/предложения и командой `python manage.py expire_offers`. Новые данные после рассмотрения отправляются через `/revise/`, ответ на уточнение — через `/provide-information/`. Seeds идемпотентны. `seed_demo --reset-passwords` обновляет пароли только четырёх демо-пользователей.
 
 ## Границы версии
 

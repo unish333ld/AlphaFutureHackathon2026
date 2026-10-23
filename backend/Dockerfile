@@ -6,6 +6,7 @@ RUN pip install --no-cache-dir -r /app/requirements.lock \
     && useradd --create-home --uid 10001 credit
 COPY --chown=credit:credit backend /app/backend
 COPY --chown=credit:credit pyproject.toml /app/pyproject.toml
+COPY --chown=credit:credit scripts /app/scripts
 WORKDIR /app/backend
 USER credit
 EXPOSE 8000
