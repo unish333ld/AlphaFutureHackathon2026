@@ -122,9 +122,15 @@ REST_FRAMEWORK = {
 }
 
 AI_ENABLED = os.getenv("AI_ENABLED", "false").lower() == "true"
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "compatible").lower()
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "http://host.docker.internal:11434/v1").rstrip("/")
 LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "qwen2.5:7b-instruct-q4_0")
+LLM_FALLBACK_MODELS = tuple(
+    model.strip() for model in os.getenv("LLM_FALLBACK_MODELS", "").split(",") if model.strip()
+)
+LLM_LOCAL_FALLBACK_BASE_URL = os.getenv("LLM_LOCAL_FALLBACK_BASE_URL", "").rstrip("/")
+LLM_LOCAL_FALLBACK_MODEL = os.getenv("LLM_LOCAL_FALLBACK_MODEL", "qwen2.5:7b-instruct-q4_0")
 LLM_TIMEOUT_SECONDS = min(max(float(os.getenv("LLM_TIMEOUT_SECONDS", "40")), 1), 40)
 SPECTACULAR_SETTINGS = {
     "TITLE": "Умный кредитный кабинет предпринимателя",

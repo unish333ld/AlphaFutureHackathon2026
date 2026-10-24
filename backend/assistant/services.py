@@ -2,6 +2,7 @@
 
 import json
 import re
+from time import monotonic
 
 from django.conf import settings
 from django.db import transaction
@@ -105,7 +106,8 @@ def _model_messages(conversation, text):
 
 def _answer(user, conversation, text):
     messages = _model_messages(conversation, text)
-    first = chat(messages, tools=TOOL_DEFINITIONS)
+    deadline = monotonic() + 75
+    first = chat(messages, tools=TOOL_DEFINITIONS, deadline=deadline)
     facts = []
     suggested_draft = {}
     tool_calls = first.get("tool_calls") or []
@@ -140,13 +142,25 @@ def _answer(user, conversation, text):
                     "content": json.dumps(result, ensure_ascii=False),
                 }
             )
-        final = chat(messages)
+        try:
+            final = chat(
+                messages,
+                deadline=deadline,
+                backend=first.get("_backend"),
+                model=first.get("_model"),
+            )
+        except AssistantUnavailable:
+            return _safe_fact_summary(facts)[:MAX_ANSWER_LENGTH], facts, suggested_draft
     else:
         final = first
     if final.get("tool_calls"):
+        if facts:
+            return _safe_fact_summary(facts)[:MAX_ANSWER_LENGTH], facts, suggested_draft
         raise AssistantUnavailable("Модель не завершила ответ. Попробуйте ещё раз.")
     content = final.get("content")
     if not isinstance(content, str) or not content.strip():
+        if facts:
+            return _safe_fact_summary(facts)[:MAX_ANSWER_LENGTH], facts, suggested_draft
         raise AssistantUnavailable("Модель не вернула ответ. Попробуйте ещё раз.")
     content = content.strip()[:MAX_ANSWER_LENGTH]
     if NUMBER_OR_MONEY.search(content):
