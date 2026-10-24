@@ -14,3 +14,13 @@ htmlcov/
 backend/staticfiles/
 *.sqlite3
 .repowise/
+node_modules/
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+frontend/test-results-linux/
+frontend/playwright-report-linux/
+frontend/test-results-*/
+frontend/playwright-report-*/
+frontend/.auth/
+*.tsbuildinfo

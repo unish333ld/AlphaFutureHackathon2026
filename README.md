@@ -1,6 +1,12 @@
 # Умный кредитный кабинет предпринимателя
 
-Backend хакатонного прототипа на Django 5.2 LTS, Django REST Framework, PostgreSQL 18 и drf-spectacular. Реализованы модели, миграции и API кредитного процесса с синтетическими данными, локальными проверками, условной подписью и моделируемой выдачей.
+Full-stack хакатонный прототип: Django 5.2 LTS, Django REST Framework, PostgreSQL 18, drf-spectacular и React-интерфейс клиента и кредитного специалиста. Единый кредитный процесс использует синтетические данные, локальные проверки, условную подпись и моделируемую выдачу.
+
+Актуальный [стек и границы релиза](docs/stack.md): Python/Django/DRF/PostgreSQL; React + TypeScript strict + Vite, Core Components Альфа-Банка, CSS Modules/Grid/Flexbox/медиазапросы, React Router, TanStack Query, React Hook Form/Zod. Django sessions + HttpOnly cookie + CSRF, drf-spectacular/OpenAPI/Swagger UI; Docker Compose, Nginx для frontend/API proxy. pytest/pytest-django, Vitest и Playwright. Bootstrap в основном приложении не используется. [Frontend: запуск, экраны и тесты](docs/frontend.md).
+
+Для frontend: [OpenAPI](docs/openapi.yaml) и [экран сотрудника → API, назначения, действия, ошибки и сессии](docs/frontend-integration.md).
+
+Дополнительный [QA-отчёт: вход, сохранение ввода и браузерная регрессия](docs/qa-auth-verification.md).
 
 ## Запуск через Docker
 
@@ -17,9 +23,10 @@ docker compose up --build -d --wait --wait-timeout 120
 docker compose logs -f web
 ```
 
-Миграции, static-файлы Swagger и seeds выполняются при старте. PostgreSQL доступен внутри Compose; веб-сервис слушает `127.0.0.1:8000`.
+Миграции, static-файлы Swagger и seeds выполняются при старте. PostgreSQL доступен внутри Compose; Nginx отдаёт интерфейс на **http://localhost:8080**, а API доступен с того же origin `/api/`. Прямой backend слушает `127.0.0.1:8000`; не смешивайте разные origin в одной браузерной сессии.
 
 - Swagger: http://localhost:8000/api/docs/
+- Swagger через frontend origin: http://localhost:8080/api/docs/
 - Вход для Swagger: http://localhost:8000/api/session/login/
 - ReDoc: http://localhost:8000/api/redoc/
 - OpenAPI: http://localhost:8000/api/schema/
@@ -49,10 +56,10 @@ docker compose logs -f web
 
 1. Войдите как `client`. В `GET /api/v1/applications/` есть пять черновиков. `Демо · Рост` предназначен для одобрения. Новая заявка создаётся через `POST /applications/` с UUID из справочников компаний и продуктов.
 2. Вызовите `POST /applications/{id}/submit/` с текущим `lock_version`. Проверки синхронные и локальные; стандартная заявка перейдёт в `review`.
-3. Войдите как `specialist`. `POST /staff/applications/{id}/decide/` с новой версией применит серверную демо-политику и создаст предложение либо отказ.
+3. Войдите как `specialist`. Сначала `POST /staff/applications/{id}/claim/` с lock_version, затем `POST /staff/applications/{id}/decide/` с версией из claim. Серверная политика создаст предложение либо отказ. Освободить свою заявку: `/release/`. Очередь «мои»: `GET /staff/applications/?assignment=mine`, свободные — `assignment=free`.
 4. Как `client`: `POST /offers/{id}/accept/`. В ответе появится демо-договор с зафиксированными условиями и `document_hash`.
 5. `POST /agreements/{id}/sign/`: `lock_version`, `document_hash`, `confirm_simulation=true`.
-6. Как `specialist`: `POST /agreements/{id}/disburse/` с новой версией и UUID в заголовке `Idempotency-Key`. Повтор того же ключа и договора вернёт ту же выдачу. Клиент видит результат в карточке и `/disbursements/`.
+6. Как назначенный `specialist`: `POST /agreements/{id}/disburse/` с новой версией и UUID в заголовке `Idempotency-Key`. Повтор того же ключа и договора вернёт ту же выдачу. Клиент видит результат в карточке и `/disbursements/`. Завершение автоматически снимает назначение.
 
 Версию берите из последнего `GET /applications/{id}/`: одно действие может сохранить несколько переходов. Мутирующие действия принимают только разрешённые поля; статус, риск, ставку и банковское решение назначает сервер.
 
@@ -94,4 +101,4 @@ HTML-отчёт: `htmlcov/index.html`. Порог покрытия — 95% по 
 
 ## Границы версии
 
-Реализован backend. React-интерфейс и ИИ-помощник — следующие этапы. Скоринг, условия продуктов, подпись и выдача демонстрационные; реальных переводов, БКИ/ФНС, финансовых документов и платных API нет. Применены проектные навыки `alfa-credit-build`, `alfa-credit-guardrails`, `django-expert` и PostgreSQL-рекомендации. Юридическая проверка реального банковского сервиса не проводилась. Зависимости перечислены в [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Реализованы backend и React-интерфейс. ИИ — только отключаемая визуальная заготовка (`VITE_AI_ASSISTANT_ENABLED=false` по умолчанию), без backend LLM-интеграции. Прогноз денежных потоков и стресс-тесты — следующий продуктовый этап; SLA и сложная приоритизация вне релиза. Скоринг, условия продуктов, подпись и выдача демонстрационные; реальных переводов, БКИ/ФНС, финансовых документов и платных API нет. Применены `alfa-credit-frontend`, `alfa-credit-build`, `alfa-credit-guardrails`, React- и Playwright-рекомендации; для backend — `django-expert` и PostgreSQL-рекомендации. Юридическая проверка реального банковского сервиса не проводилась. Зависимости перечислены в [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

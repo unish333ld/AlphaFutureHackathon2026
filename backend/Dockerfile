@@ -7,6 +7,7 @@ RUN pip install --no-cache-dir -r /app/requirements.lock \
 COPY --chown=credit:credit backend /app/backend
 COPY --chown=credit:credit pyproject.toml /app/pyproject.toml
 COPY --chown=credit:credit scripts /app/scripts
+COPY --chown=credit:credit docs/openapi.yaml /app/docs/openapi.yaml
 WORKDIR /app/backend
 USER credit
 EXPOSE 8000

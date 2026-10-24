@@ -50,7 +50,17 @@ POST {{base}}/session/logout/
 X-CSRFToken: {{csrf}}
 
 ### Очередь специалиста
-GET {{base}}/staff/applications/?status=review
+GET {{base}}/staff/applications/?status=review&assignment=free&ordering=created_at
+
+### Взять в работу. Только текущий специалист, затем обновите @version из ответа.
+POST {{base}}/staff/applications/{{application}}/claim/
+Content-Type: application/json
+X-CSRFToken: {{csrf}}
+
+{"lock_version":{{version}}}
+
+### Мои заявки; риск может быть null. Нет Grade/SLA/приоритета.
+GET {{base}}/staff/applications/?assignment=mine&risk_level=low
 
 ### Решение специалиста
 POST {{base}}/staff/applications/{{application}}/decide/
@@ -74,6 +84,7 @@ X-CSRFToken: {{csrf}}
 {"lock_version":{{version}},"document_hash":"{{hash}}","confirm_simulation":true}
 
 ### После входа специалистом — моделируемая выдача. Ключ сохраните для повтора.
+### Специалист должен оставаться исполнителем; после sign загрузите карточку для новой @version.
 POST {{base}}/agreements/{{agreement}}/disburse/
 Content-Type: application/json
 X-CSRFToken: {{csrf}}
@@ -104,3 +115,13 @@ Content-Type: application/json
 X-CSRFToken: {{csrf}}
 
 {"lock_version":{{version}}}
+
+### Освободить свою заявку (альтернативная ветка до завершения). Новый @version из ответа.
+POST {{base}}/staff/applications/{{application}}/release/
+Content-Type: application/json
+X-CSRFToken: {{csrf}}
+
+{"lock_version":{{version}}}
+
+### После 409 — только обновить карточку и проверить данные пользователем, без автоматического повтора.
+GET {{base}}/staff/applications/{{application}}/

@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Умный кредитный кабинет предпринимателя
-  version: 1.0.0
+  version: 1.1.0
   description: 'Хакатонный backend: синтетические компании, локальные проверки, условная
     подпись и моделируемая выдача. Деньги передаются строками в рублях, сроки — в
     месяцах. Для Try it out [войдите в сессию](/api/session/login/) в той же вкладке.
@@ -30,6 +30,67 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedAgreementList'
           description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
   /api/v1/agreements/{id}/:
     get:
       operationId: v1_agreements_retrieve
@@ -53,11 +114,80 @@ paths:
               schema:
                 $ref: '#/components/schemas/Agreement'
           description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
   /api/v1/agreements/{id}/disburse/:
     post:
       operationId: v1_agreements_disburse_create
-      description: Только specialist. Денежных переводов нет. Один договор — одна
-        выдача; повторный ключ с другим договором даёт 409.
+      description: 'Новая выдача: только назначенный текущий specialist, signed, подпись
+        и неизменённые условия. Денежных переводов нет. Idempotency-Key обязателен
+        и является UUID. Один договор — одна выдача. Тот же ключ + тот же договор
+        возвращает прежний результат (200), даже с устаревшим lock_version и после
+        автоматического освобождения назначения. lock_version — токен конкурентности,
+        не финансовое содержимое повтора; иных изменяемых полей нет. Добавленные amount/status
+        и другие поля — 400. Ключ другого договора или новый ключ для уже выданного
+        — 409. После успеха GET карточки даёт новый lock_version и issued, назначение
+        снято. При 409 обновите карточку и проверьте данные без автоматического повтора
+        значимого действия.'
       summary: Выполнить моделируемую выдачу
       parameters:
       - in: header
@@ -102,24 +232,82 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
         '403':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
         '409':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Загрузите заявку заново.
+                    code: stale_version
+                  summary: Пример ошибки
+          description: Конфликт версии, назначения или состояния. GET карточки, проверка
+            пользователем; не повторяйте действие автоматически.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
   /api/v1/agreements/{id}/sign/:
     post:
       operationId: v1_agreements_sign_create
-      description: Требует can_sign, document_hash и confirm_simulation=true. Юридически
-        значимая электронная подпись не выполняется.
+      description: Требует can_sign, document_hash и confirm_simulation=true; назначение
+        специалиста не ограничивает клиента. Срок подписи — sign_before. Юридически
+        значимая электронная подпись не выполняется. После успеха GET /api/v1/applications/{application_id}/
+        возвращает новый lock_version; application_id есть у предложения.
       summary: Условно подписать принятую версию договора
       parameters:
       - in: path
@@ -157,19 +345,75 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
         '403':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
         '409':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Загрузите заявку заново.
+                    code: stale_version
+                  summary: Пример ошибки
+          description: Конфликт версии, назначения или состояния. GET карточки, проверка
+            пользователем; не повторяйте действие автоматически.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
   /api/v1/applications/:
     get:
       operationId: v1_applications_list
@@ -209,6 +453,67 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedApplicationListList'
           description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
     post:
       operationId: v1_applications_create
       summary: Создать черновик
@@ -251,13 +556,75 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Загрузите заявку заново.
+                    code: stale_version
+                  summary: Пример ошибки
+          description: Конфликт версии, назначения или состояния. GET карточки, проверка
+            пользователем; не повторяйте действие автоматически.
   /api/v1/applications/{id}/:
     get:
       operationId: v1_applications_retrieve
@@ -281,6 +648,67 @@ paths:
               schema:
                 $ref: '#/components/schemas/Application'
           description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
     patch:
       operationId: v1_applications_partial_update
       summary: Изменить поля черновика
@@ -319,25 +747,75 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
         '403':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
         '409':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Загрузите заявку заново.
+                    code: stale_version
+                  summary: Пример ошибки
+          description: Конфликт версии, назначения или состояния. GET карточки, проверка
+            пользователем; не повторяйте действие автоматически.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
   /api/v1/applications/{id}/events/:
     get:
       operationId: v1_applications_events_list
@@ -367,6 +845,67 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedEventList'
           description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
   /api/v1/applications/{id}/provide-information/:
     post:
       operationId: v1_applications_provide_information_create
@@ -407,25 +946,75 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
         '403':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
         '409':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Загрузите заявку заново.
+                    code: stale_version
+                  summary: Пример ошибки
+          description: Конфликт версии, назначения или состояния. GET карточки, проверка
+            пользователем; не повторяйте действие автоматически.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
   /api/v1/applications/{id}/retry-checks/:
     post:
       operationId: v1_applications_retry_checks_create
@@ -466,25 +1055,75 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
         '403':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
         '409':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Загрузите заявку заново.
+                    code: stale_version
+                  summary: Пример ошибки
+          description: Конфликт версии, назначения или состояния. GET карточки, проверка
+            пользователем; не повторяйте действие автоматически.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
   /api/v1/applications/{id}/revise/:
     post:
       operationId: v1_applications_revise_create
@@ -527,25 +1166,75 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
         '403':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
         '409':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Загрузите заявку заново.
+                    code: stale_version
+                  summary: Пример ошибки
+          description: Конфликт версии, назначения или состояния. GET карточки, проверка
+            пользователем; не повторяйте действие автоматически.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
   /api/v1/applications/{id}/submit/:
     post:
       operationId: v1_applications_submit_create
@@ -588,25 +1277,75 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
         '403':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
         '409':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Загрузите заявку заново.
+                    code: stale_version
+                  summary: Пример ошибки
+          description: Конфликт версии, назначения или состояния. GET карточки, проверка
+            пользователем; не повторяйте действие автоматически.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
   /api/v1/calculator/payment/:
     post:
       operationId: v1_calculator_payment_create
@@ -642,6 +1381,67 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaymentResponse'
           description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
   /api/v1/companies/:
     get:
       operationId: v1_companies_list
@@ -664,6 +1464,67 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedCompanyList'
           description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
   /api/v1/companies/{id}/:
     get:
       operationId: v1_companies_retrieve
@@ -687,6 +1548,67 @@ paths:
               schema:
                 $ref: '#/components/schemas/Company'
           description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
   /api/v1/disbursements/:
     get:
       operationId: v1_disbursements_list
@@ -709,6 +1631,67 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedDisbursementList'
           description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
   /api/v1/disbursements/{id}/:
     get:
       operationId: v1_disbursements_retrieve
@@ -732,6 +1715,67 @@ paths:
               schema:
                 $ref: '#/components/schemas/Disbursement'
           description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
   /api/v1/health/:
     get:
       operationId: v1_health_retrieve
@@ -751,6 +1795,54 @@ paths:
               schema:
                 $ref: '#/components/schemas/Health'
           description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
   /api/v1/me/:
     get:
       operationId: v1_me_retrieve
@@ -766,6 +1858,67 @@ paths:
               schema:
                 $ref: '#/components/schemas/User'
           description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
   /api/v1/offers/:
     get:
       operationId: v1_offers_list
@@ -788,6 +1941,67 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedOfferList'
           description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
   /api/v1/offers/{id}/:
     get:
       operationId: v1_offers_retrieve
@@ -811,6 +2025,67 @@ paths:
               schema:
                 $ref: '#/components/schemas/Offer'
           description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
   /api/v1/offers/{id}/accept/:
     post:
       operationId: v1_offers_accept_create
@@ -851,25 +2126,75 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
         '403':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
         '409':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Загрузите заявку заново.
+                    code: stale_version
+                  summary: Пример ошибки
+          description: Конфликт версии, назначения или состояния. GET карточки, проверка
+            пользователем; не повторяйте действие автоматически.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
   /api/v1/offers/{id}/decline/:
     post:
       operationId: v1_offers_decline_create
@@ -910,25 +2235,75 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
         '403':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
         '409':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Загрузите заявку заново.
+                    code: stale_version
+                  summary: Пример ошибки
+          description: Конфликт версии, назначения или состояния. GET карточки, проверка
+            пользователем; не повторяйте действие автоматически.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
   /api/v1/products/:
     get:
       operationId: v1_products_list
@@ -951,6 +2326,67 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedProductList'
           description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
   /api/v1/products/{id}/:
     get:
       operationId: v1_products_retrieve
@@ -974,15 +2410,73 @@ paths:
               schema:
                 $ref: '#/components/schemas/Product'
           description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
   /api/v1/session/csrf/:
     get:
       operationId: v1_session_csrf_retrieve
       summary: Получить CSRF-токен и cookie
       tags:
       - Сессия
-      security:
-      - cookieAuth: []
-      - {}
       responses:
         '200':
           content:
@@ -990,11 +2484,78 @@ paths:
               schema:
                 $ref: '#/components/schemas/Csrf'
           description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
   /api/v1/session/login/:
     post:
       operationId: v1_session_login_create
-      description: Сначала GET /session/csrf/, затем передайте X-CSRFToken. Вход вращает
-        токен; используйте новый из ответа.
+      description: '1. GET /api/v1/session/csrf/ с сохранением cookies. 2. POST сюда
+        с X-CSRFToken и credentials: include. 3. Вход вращает CSRF: используйте csrf_token
+        из этого ответа для следующих изменений. Session cookie HttpOnly, не читается
+        JavaScript. 4. GET /api/v1/me/ возвращает роль и членства/can_submit/can_sign.
+        5. POST /api/v1/session/logout/ с новым CSRF завершает серверную сессию. Неверные
+        credentials или CSRF — 403, лимит — 429. /api/session/login/ — отдельная служебная
+        HTML-форма для Swagger/Admin, не версия JSON login. Frontend и API проектируются
+        под один origin; Nginx проксирует /api/.'
       summary: 'Войти: session cookie + CSRF'
       tags:
       - Сессия
@@ -1017,6 +2578,67 @@ paths:
               schema:
                 $ref: '#/components/schemas/LoginResponse'
           description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
   /api/v1/session/logout/:
     post:
       operationId: v1_session_logout_create
@@ -1028,34 +2650,181 @@ paths:
       responses:
         '204':
           description: No response body
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
   /api/v1/staff/applications/:
     get:
       operationId: v1_staff_applications_list
+      description: Пагинация по 25 строк, стабильная сортировка с UUID как вторичным
+        ключом; NULL в конце. assignment=free — свободные, mine — назначенные текущему
+        специалисту, all — все. risk_level=unassessed — оценка отсутствует. search
+        — подстрока номера/названия компании/ИНН. amount, term_months и risk_level
+        относятся строго к максимальному revision_no. История ревизий в строки не
+        включается. status_changed_at — фактическое начало текущего кредитного статуса,
+        не SLA банка.
       summary: Очередь специалиста
       parameters:
-      - name: page
-        required: false
-        in: query
-        description: A page number within the paginated result set.
+      - in: query
+        name: assignment
+        schema:
+          enum:
+          - all
+          - free
+          - mine
+          type: string
+          default: all
+          minLength: 1
+        description: |-
+          * `all` - all
+          * `free` - free
+          * `mine` - mine
+      - in: query
+        name: ordering
+        schema:
+          enum:
+          - created_at
+          - -created_at
+          - updated_at
+          - -updated_at
+          - assigned_at
+          - -assigned_at
+          - amount
+          - -amount
+          - term_months
+          - -term_months
+          - number
+          - -number
+          type: string
+          default: -created_at
+          minLength: 1
+        description: |-
+          * `created_at` - created_at
+          * `-created_at` - -created_at
+          * `updated_at` - updated_at
+          * `-updated_at` - -updated_at
+          * `assigned_at` - assigned_at
+          * `-assigned_at` - -assigned_at
+          * `amount` - amount
+          * `-amount` - -amount
+          * `term_months` - term_months
+          * `-term_months` - -term_months
+          * `number` - number
+          * `-number` - -number
+      - in: query
+        name: page
         schema:
           type: integer
+          minimum: 1
+      - in: query
+        name: risk_level
+        schema:
+          enum:
+          - low
+          - medium
+          - high
+          - unassessed
+          type: string
+          minLength: 1
+        description: |-
+          * `low` - low
+          * `medium` - medium
+          * `high` - high
+          * `unassessed` - unassessed
+      - in: query
+        name: search
+        schema:
+          type: string
+          maxLength: 100
       - in: query
         name: status
         schema:
-          type: string
           enum:
-          - accepted
-          - checking
-          - declined
           - draft
-          - expired
-          - issued
+          - submitted
+          - checking
+          - review
           - needs_info
           - offered
-          - rejected
-          - review
+          - accepted
           - signed
-          - submitted
+          - issued
+          - rejected
+          - declined
+          - expired
+          type: string
+          minLength: 1
+        description: |-
+          * `draft` - Черновик
+          * `submitted` - Отправлена
+          * `checking` - Выполняются проверки
+          * `review` - Рассмотрение специалистом
+          * `needs_info` - Нужно уточнение
+          * `offered` - Есть предложение
+          * `accepted` - Предложение принято
+          * `signed` - Условно подписана
+          * `issued` - Моделируемая выдача выполнена
+          * `rejected` - Отказ
+          * `declined` - Клиент отклонил
+          * `expired` - Срок предложения истёк
       tags:
       - Банк
       security:
@@ -1065,8 +2834,69 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PaginatedApplicationListList'
+                $ref: '#/components/schemas/PaginatedStaffApplicationListList'
           description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
   /api/v1/staff/applications/{id}/:
     get:
       operationId: v1_staff_applications_retrieve
@@ -1090,12 +2920,196 @@ paths:
               schema:
                 $ref: '#/components/schemas/Application'
           description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
+  /api/v1/staff/applications/{id}/claim/:
+    post:
+      operationId: v1_staff_applications_claim_create
+      description: 'Только specialist, назначается текущий пользователь. Статусы:
+        checking/review/needs_info/offered/accepted/signed. Кредитный статус не меняется.
+        Возвращает новый lock_version и событие assignment_claimed. Повтор тем же
+        исполнителем с актуальной версией — 200 без изменений; старая версия или другой
+        исполнитель — 409. Чужого исполнителя переназначить нельзя.'
+      summary: Взять свободную заявку в работу
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Кредитная заявка.
+        required: true
+      tags:
+      - Банк
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VersionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VersionRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Загрузите заявку заново.
+                    code: stale_version
+                  summary: Пример ошибки
+          description: Конфликт версии, назначения или состояния. GET карточки, проверка
+            пользователем; не повторяйте действие автоматически.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
   /api/v1/staff/applications/{id}/decide/:
     post:
       operationId: v1_staff_applications_decide_create
-      description: 'Только specialist. Сервер использует сохранённую оценку текущей
-        ревизии: одобрение, уменьшенная сумма или отказ. Ставку и решение нельзя назначить
-        в теле запроса.'
+      description: 'Только назначенный текущий specialist, статус review и актуальный
+        lock_version. Сотрудник запускает серверную политику; тело не принимает исход,
+        ставку или сумму. Используется assessment текущей (максимальный revision_no)
+        отправленной ревизии и её checks_attempt: полный набор registry/credit_history/financial
+        без missing/error, оценка создана после этих проверок. Новая попытка делает
+        старую оценку непригодной. Результат approved/counteroffer/rejected, reason_code,
+        explanation, policy_version и offer находятся в revisions[0].assessment.decision;
+        ссылки assessment/revision и checks_attempt явные. Повтор после решения —
+        409, нового решения/предложения не создаёт. Конфликт назначения, версии, состояния
+        или устаревшей оценки — 409: обновите карточку и предложите пользователю проверить
+        данные. Положительный результат сохраняет исполнителя при ожидании клиента;
+        отказ освобождает назначение.'
       summary: Принять решение по демонстрационной политике
       parameters:
       - in: path
@@ -1133,28 +3147,194 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
         '403':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
         '409':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Загрузите заявку заново.
+                    code: stale_version
+                  summary: Пример ошибки
+          description: Конфликт версии, назначения или состояния. GET карточки, проверка
+            пользователем; не повторяйте действие автоматически.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
+  /api/v1/staff/applications/{id}/release/:
+    post:
+      operationId: v1_staff_applications_release_create
+      description: Только текущий исполнитель. Событие assignment_released, новый
+        lock_version; кредитный статус не меняется. Чужая или свободная заявка — 409.
+        Ожидание ответа клиента сохраняет назначение; issued/rejected/declined/expired
+        снимают его автоматически с отдельным событием.
+      summary: Освободить свою заявку
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Кредитная заявка.
+        required: true
+      tags:
+      - Банк
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VersionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VersionRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
           description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Загрузите заявку заново.
+                    code: stale_version
+                  summary: Пример ошибки
+          description: Конфликт версии, назначения или состояния. GET карточки, проверка
+            пользователем; не повторяйте действие автоматически.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
   /api/v1/staff/applications/{id}/request-information/:
     post:
       operationId: v1_staff_applications_request_information_create
+      description: Только назначенный текущий specialist, статусы review/checking.
+        Свободная или чужая заявка — 409. Переход в needs_info сохраняет исполнителя;
+        клиент отвечает новой ревизией, проверки и оценка выполняются заново.
       summary: Запросить уточнение у компании
       parameters:
       - in: path
@@ -1192,27 +3372,107 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
         '403':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
         '404':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
         '409':
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-          description: ''
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Загрузите заявку заново.
+                    code: stale_version
+                  summary: Пример ошибки
+          description: Конфликт версии, назначения или состояния. GET карточки, проверка
+            пользователем; не повторяйте действие автоматически.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
 components:
   schemas:
+    ActionEnum:
+      enum:
+      - update_draft
+      - submit
+      - retry_checks
+      - provide_information
+      - revise
+      - claim
+      - release
+      - request_information
+      - decide
+      - accept_offer
+      - decline_offer
+      - sign_agreement
+      - disburse
+      type: string
+      description: |-
+        * `update_draft` - update_draft
+        * `submit` - submit
+        * `retry_checks` - retry_checks
+        * `provide_information` - provide_information
+        * `revise` - revise
+        * `claim` - claim
+        * `release` - release
+        * `request_information` - request_information
+        * `decide` - decide
+        * `accept_offer` - accept_offer
+        * `decline_offer` - decline_offer
+        * `sign_agreement` - sign_agreement
+        * `disburse` - disburse
     Agreement:
       type: object
       properties:
@@ -1229,8 +3489,105 @@ components:
           readOnly: true
           title: Номер демо-договора
         terms_snapshot:
+          type: object
+          properties:
+            schema_version:
+              type: integer
+              enum:
+              - 1
+            offer_id:
+              type: string
+              format: uuid
+            company_id:
+              type: string
+              format: uuid
+            amount:
+              type: string
+              pattern: ^-?\d+\.\d{2}$
+              example: '1000000.00'
+            annual_rate:
+              type: string
+              pattern: ^\d+(\.\d+)?$
+              example: '18.0000'
+            term_months:
+              type: integer
+              minimum: 1
+              maximum: 120
+            monthly_payment:
+              type: string
+              pattern: ^-?\d+\.\d{2}$
+              example: '1000000.00'
+            schedule:
+              type: object
+              properties:
+                schema_version:
+                  type: integer
+                  enum:
+                  - 1
+                method:
+                  type: string
+                  enum:
+                  - demo_annuity_monthly
+                fees:
+                  type: string
+                  enum:
+                  - '0.00'
+                rows:
+                  type: array
+                  minItems: 1
+                  maxItems: 120
+                  items:
+                    type: object
+                    properties:
+                      month:
+                        type: integer
+                        minimum: 1
+                        maximum: 120
+                      payment:
+                        type: string
+                        pattern: ^-?\d+\.\d{2}$
+                        example: '1000000.00'
+                      principal:
+                        type: string
+                        pattern: ^-?\d+\.\d{2}$
+                        example: '1000000.00'
+                      interest:
+                        type: string
+                        pattern: ^-?\d+\.\d{2}$
+                        example: '1000000.00'
+                      balance:
+                        type: string
+                        pattern: ^-?\d+\.\d{2}$
+                        example: '1000000.00'
+                    required:
+                    - month
+                    - payment
+                    - principal
+                    - interest
+                    - balance
+                    additionalProperties: false
+              required:
+              - schema_version
+              - method
+              - fees
+              - rows
+              additionalProperties: false
+            signature_mode:
+              type: string
+              enum:
+              - simulation
+          required:
+          - schema_version
+          - offer_id
+          - company_id
+          - amount
+          - annual_rate
+          - term_months
+          - monthly_payment
+          - schedule
+          - signature_mode
+          additionalProperties: false
           readOnly: true
-          title: Зафиксированные условия (v1)
         document_hash:
           type: string
           readOnly: true
@@ -1315,22 +3672,58 @@ components:
           format: date-time
           readOnly: true
           title: Изменена
+        number:
+          type: string
+          readOnly: true
+          title: Номер заявки
         revisions:
           type: array
           items:
             $ref: '#/components/schemas/Revision'
           readOnly: true
+        current_revision_id:
+          type: string
+          format: uuid
+          nullable: true
+          readOnly: true
+        assigned_to:
+          allOf:
+          - $ref: '#/components/schemas/SpecialistSummary'
+          readOnly: true
+          nullable: true
+        assigned_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          title: Назначена
+        status_changed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Начало текущего состояния
+        available_actions:
+          type: array
+          items:
+            $ref: '#/components/schemas/AvailableAction'
+          readOnly: true
       required:
+      - assigned_at
+      - assigned_to
+      - available_actions
       - company
       - company_name
       - created_at
       - created_by
+      - current_revision_id
       - id
       - lock_version
+      - number
       - product
       - product_name
       - revisions
       - status
+      - status_changed_at
       - updated_at
     ApplicationCreateRequest:
       type: object
@@ -1467,6 +3860,14 @@ components:
           type: string
           format: uuid
           readOnly: true
+        revision:
+          type: string
+          format: uuid
+          readOnly: true
+        checks_attempt:
+          type: integer
+          readOnly: true
+          title: Использованная попытка проверок
         score:
           type: integer
           readOnly: true
@@ -1477,8 +3878,40 @@ components:
           readOnly: true
           title: Риск
         factors:
+          type: object
+          properties:
+            schema_version:
+              type: integer
+              enum:
+              - 1
+            failed_checks:
+              type: array
+              items:
+                type: string
+                enum:
+                - registry
+                - credit_history
+                - financial
+            monthly_cashflow:
+              type: string
+              pattern: ^-?\d+\.\d{2}$
+              example: '1000000.00'
+            payment_capacity:
+              type: string
+              pattern: ^-?\d+\.\d{2}$
+              example: '1000000.00'
+            capacity_fraction:
+              type: string
+              enum:
+              - '0.50'
+          required:
+          - schema_version
+          - failed_checks
+          - monthly_cashflow
+          - payment_capacity
+          - capacity_fraction
+          additionalProperties: false
           readOnly: true
-          title: Факторы оценки (v1)
         rules_version:
           type: string
           readOnly: true
@@ -1494,13 +3927,38 @@ components:
           readOnly: true
           nullable: true
       required:
+      - checks_attempt
       - created_at
       - decision
       - factors
       - id
+      - revision
       - risk_level
       - rules_version
       - score
+    AvailableAction:
+      type: object
+      properties:
+        action:
+          $ref: '#/components/schemas/ActionEnum'
+        allowed:
+          type: boolean
+        reason_code:
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/ReasonCodeEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        target_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: UUID заявки, предложения или договора для соответствующего
+            действия. Подсказка не отменяет серверную проверку.
+      required:
+      - action
+      - allowed
+      - reason_code
+      - target_id
     Check:
       type: object
       properties:
@@ -1523,8 +3981,58 @@ components:
           readOnly: true
           title: Попытка
         result:
+          oneOf:
+          - type: object
+            properties:
+              schema_version:
+                type: integer
+                enum:
+                - 1
+              registration_status:
+                type: string
+                enum:
+                - active
+                - inactive
+              retryable:
+                type: boolean
+            required:
+            - schema_version
+            - registration_status
+            - retryable
+            additionalProperties: false
+          - type: object
+            properties:
+              schema_version:
+                type: integer
+                enum:
+                - 1
+              overdue:
+                type: boolean
+            required:
+            - schema_version
+            - overdue
+            additionalProperties: false
+          - type: object
+            properties:
+              schema_version:
+                type: integer
+                enum:
+                - 1
+              missing_fields:
+                type: array
+                items:
+                  type: string
+                  enum:
+                  - monthly_revenue
+                  - monthly_expenses
+                  - monthly_debt_payments
+            required:
+            - schema_version
+            - missing_fields
+            additionalProperties: false
+          description: 'Форма соответствует kind: registry, credit_history или financial.
+            Локальные синтетические адаптеры v1; ошибка не является кредитным отказом.'
           readOnly: true
-          title: Результат адаптера (v1)
         source:
           type: string
           readOnly: true
@@ -1640,6 +4148,10 @@ components:
           type: string
           format: uuid
           readOnly: true
+        assessment:
+          type: string
+          format: uuid
+          readOnly: true
         outcome:
           allOf:
           - $ref: '#/components/schemas/OutcomeEnum'
@@ -1673,6 +4185,7 @@ components:
           readOnly: true
           nullable: true
       required:
+      - assessment
       - created_at
       - decided_by
       - explanation
@@ -1741,14 +4254,30 @@ components:
       - issued_at
       - status
     Error:
-      type: object
-      properties:
-        detail:
+      description: 'Сохраняет формат DRF: общая ошибка detail и необязательный code;
+        ошибки по именам полей (строка или массив строк), non_field_errors; в старых
+        общих validation-ответах возможен массив строк.'
+      anyOf:
+      - type: object
+        properties:
+          detail:
+            type: string
+          code:
+            type: string
+        required:
+        - detail
+        additionalProperties: false
+      - type: object
+        minProperties: 1
+        additionalProperties:
+          oneOf:
+          - type: string
+          - type: array
+            items:
+              type: string
+      - type: array
+        items:
           type: string
-          description: Описание ошибки. При валидации ответ содержит ошибки по именам
-            полей.
-      required:
-      - detail
     Event:
       type: object
       properties:
@@ -1772,8 +4301,55 @@ components:
           type: string
           readOnly: true
         details:
+          type: object
+          properties:
+            schema_version:
+              type: integer
+              enum:
+              - 1
+            attempt:
+              type: integer
+              minimum: 1
+              maximum: 5
+            retryable:
+              type: boolean
+            revision_no:
+              type: integer
+              minimum: 1
+            reason_code:
+              type: string
+            outcome:
+              type: string
+              enum:
+              - approved
+              - counteroffer
+              - rejected
+            disbursement_id:
+              type: string
+              format: uuid
+            is_simulated:
+              type: boolean
+              enum:
+              - true
+            signature_mode:
+              type: string
+              enum:
+              - simulation
+            assigned_to:
+              type: string
+              format: uuid
+            reason:
+              type: string
+              enum:
+              - manual
+              - terminal_state
+          required:
+          - schema_version
+          additionalProperties: false
+          description: 'Безопасные метаданные v1; набор ключей зависит от event_type.
+            Нет документов, секретов или произвольного пользовательского JSON. assignment_*:
+            assigned_to; освобождение также reason.'
           readOnly: true
-          title: Безопасные сведения (v1)
         created_at:
           type: string
           format: date-time
@@ -1909,6 +4485,9 @@ components:
       - can_submit
       - company
       - role
+    NullEnum:
+      enum:
+      - null
     Offer:
       type: object
       properties:
@@ -1951,8 +4530,61 @@ components:
           readOnly: true
           title: Регулярный платёж, ₽
         schedule:
+          type: object
+          properties:
+            schema_version:
+              type: integer
+              enum:
+              - 1
+            method:
+              type: string
+              enum:
+              - demo_annuity_monthly
+            fees:
+              type: string
+              enum:
+              - '0.00'
+            rows:
+              type: array
+              minItems: 1
+              maxItems: 120
+              items:
+                type: object
+                properties:
+                  month:
+                    type: integer
+                    minimum: 1
+                    maximum: 120
+                  payment:
+                    type: string
+                    pattern: ^-?\d+\.\d{2}$
+                    example: '1000000.00'
+                  principal:
+                    type: string
+                    pattern: ^-?\d+\.\d{2}$
+                    example: '1000000.00'
+                  interest:
+                    type: string
+                    pattern: ^-?\d+\.\d{2}$
+                    example: '1000000.00'
+                  balance:
+                    type: string
+                    pattern: ^-?\d+\.\d{2}$
+                    example: '1000000.00'
+                required:
+                - month
+                - payment
+                - principal
+                - interest
+                - balance
+                additionalProperties: false
+          required:
+          - schema_version
+          - method
+          - fees
+          - rows
+          additionalProperties: false
           readOnly: true
-          title: Упрощённый график по номерам месяцев (v1)
         status:
           allOf:
           - $ref: '#/components/schemas/OfferStatusEnum'
@@ -2185,6 +4817,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Product'
+    PaginatedStaffApplicationListList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/StaffApplicationList'
     PatchedDraftUpdateRequest:
       type: object
       description: Reject extra fields instead of silently dropping status/rate/role
@@ -2249,6 +4904,60 @@ components:
           format: decimal
           pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
         schedule:
+          type: object
+          properties:
+            schema_version:
+              type: integer
+              enum:
+              - 1
+            method:
+              type: string
+              enum:
+              - demo_annuity_monthly
+            fees:
+              type: string
+              enum:
+              - '0.00'
+            rows:
+              type: array
+              minItems: 1
+              maxItems: 120
+              items:
+                type: object
+                properties:
+                  month:
+                    type: integer
+                    minimum: 1
+                    maximum: 120
+                  payment:
+                    type: string
+                    pattern: ^-?\d+\.\d{2}$
+                    example: '1000000.00'
+                  principal:
+                    type: string
+                    pattern: ^-?\d+\.\d{2}$
+                    example: '1000000.00'
+                  interest:
+                    type: string
+                    pattern: ^-?\d+\.\d{2}$
+                    example: '1000000.00'
+                  balance:
+                    type: string
+                    pattern: ^-?\d+\.\d{2}$
+                    example: '1000000.00'
+                required:
+                - month
+                - payment
+                - principal
+                - interest
+                - balance
+                additionalProperties: false
+          required:
+          - schema_version
+          - method
+          - fees
+          - rows
+          additionalProperties: false
           description: 'График v1: месяц, платёж, основной долг, проценты, остаток;
             без комиссий.'
       required:
@@ -2320,6 +5029,50 @@ components:
       - min_term_months
       - name
       - rules_version
+    ReasonCodeEnum:
+      enum:
+      - role_required
+      - capability_required
+      - assignment_required
+      - assigned_to_other
+      - already_assigned
+      - not_assigned
+      - invalid_state
+      - needs_information
+      - technical_error
+      - retry_limit
+      - waiting_for_client
+      - offer_expired
+      - assessment_unavailable
+      - assessment_outdated
+      - checks_incomplete
+      - already_completed
+      - no_current_revision
+      - terms_mismatch
+      - product_unavailable
+      - invalid_terms
+      type: string
+      description: |-
+        * `role_required` - role_required
+        * `capability_required` - capability_required
+        * `assignment_required` - assignment_required
+        * `assigned_to_other` - assigned_to_other
+        * `already_assigned` - already_assigned
+        * `not_assigned` - not_assigned
+        * `invalid_state` - invalid_state
+        * `needs_information` - needs_information
+        * `technical_error` - technical_error
+        * `retry_limit` - retry_limit
+        * `waiting_for_client` - waiting_for_client
+        * `offer_expired` - offer_expired
+        * `assessment_unavailable` - assessment_unavailable
+        * `assessment_outdated` - assessment_outdated
+        * `checks_incomplete` - checks_incomplete
+        * `already_completed` - already_completed
+        * `no_current_revision` - no_current_revision
+        * `terms_mismatch` - terms_mismatch
+        * `product_unavailable` - product_unavailable
+        * `invalid_terms` - invalid_terms
     Revision:
       type: object
       properties:
@@ -2367,8 +5120,123 @@ components:
           nullable: true
           title: Месячные платежи по обязательствам, ₽
         input_snapshot:
+          oneOf:
+          - type: object
+            maxProperties: 0
+            additionalProperties: false
+          - type: object
+            properties:
+              schema_version:
+                type: integer
+                enum:
+                - 1
+              company:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  inn:
+                    type: string
+                  name:
+                    type: string
+                  status:
+                    type: string
+                    enum:
+                    - active
+                    - inactive
+                  registered_at:
+                    type: string
+                    format: date
+                  demo_scenario:
+                    type: string
+                    enum:
+                    - standard
+                    - bad_history
+                    - check_error
+                  is_existing_client:
+                    type: boolean
+                required:
+                - id
+                - inn
+                - name
+                - status
+                - registered_at
+                - demo_scenario
+                - is_existing_client
+                additionalProperties: false
+              product:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                  code:
+                    type: string
+                  rules_version:
+                    type: string
+                  annual_rate:
+                    type: string
+                    pattern: ^\d+(\.\d+)?$
+                    example: '18.0000'
+                  min_amount:
+                    type: string
+                    pattern: ^-?\d+\.\d{2}$
+                    example: '1000000.00'
+                  max_amount:
+                    type: string
+                    pattern: ^-?\d+\.\d{2}$
+                    example: '1000000.00'
+                  min_term_months:
+                    type: integer
+                    minimum: 1
+                    maximum: 120
+                  max_term_months:
+                    type: integer
+                    minimum: 1
+                    maximum: 120
+                required:
+                - id
+                - code
+                - rules_version
+                - annual_rate
+                - min_amount
+                - max_amount
+                - min_term_months
+                - max_term_months
+                additionalProperties: false
+              financial:
+                type: object
+                properties:
+                  monthly_revenue:
+                    type: string
+                    pattern: ^-?\d+\.\d{2}$
+                    example: '1000000.00'
+                    nullable: true
+                  monthly_expenses:
+                    type: string
+                    pattern: ^-?\d+\.\d{2}$
+                    example: '1000000.00'
+                    nullable: true
+                  monthly_debt_payments:
+                    type: string
+                    pattern: ^-?\d+\.\d{2}$
+                    example: '1000000.00'
+                    nullable: true
+                required:
+                - monthly_revenue
+                - monthly_expenses
+                - monthly_debt_payments
+                additionalProperties: false
+            required:
+            - schema_version
+            - company
+            - product
+            - financial
+            additionalProperties: false
+          description: В черновике строго {}; после отправки неизменяемый снимок v1.
+            Сумма, срок и цель находятся в полях ревизии.
           readOnly: true
-          title: Снимок компании, продукта и входных данных (v1)
         submitted_at:
           type: string
           format: date-time
@@ -2492,6 +5360,140 @@ components:
       - confirm_simulation
       - document_hash
       - lock_version
+    SpecialistSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        username:
+          type: string
+          readOnly: true
+          title: Имя пользователя
+          description: Обязательное поле. Не более 150 символов. Только буквы, цифры
+            и символы @/./+/-/_.
+        first_name:
+          type: string
+          readOnly: true
+          title: Имя
+        last_name:
+          type: string
+          readOnly: true
+          title: Фамилия
+      required:
+      - first_name
+      - id
+      - last_name
+      - username
+    StaffApplicationList:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        company:
+          type: string
+          format: uuid
+          readOnly: true
+        company_name:
+          type: string
+          readOnly: true
+        created_by:
+          type: string
+          format: uuid
+          readOnly: true
+        product:
+          type: string
+          format: uuid
+          readOnly: true
+        product_name:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ApplicationStatusEnum'
+          readOnly: true
+          title: Состояние
+        lock_version:
+          type: integer
+          readOnly: true
+          title: Версия для конкурентных изменений
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Создано
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Изменена
+        number:
+          type: string
+          readOnly: true
+          title: Номер заявки
+        company_inn:
+          type: string
+          readOnly: true
+        current_revision_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          readOnly: true
+          nullable: true
+        term_months:
+          type: integer
+          readOnly: true
+          nullable: true
+        risk_level:
+          readOnly: true
+          nullable: true
+          oneOf:
+          - $ref: '#/components/schemas/RiskLevelEnum'
+          - $ref: '#/components/schemas/NullEnum'
+        assigned_to:
+          allOf:
+          - $ref: '#/components/schemas/SpecialistSummary'
+          readOnly: true
+          nullable: true
+        assigned_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          title: Назначена
+        status_changed_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Начало текущего состояния
+      required:
+      - amount
+      - assigned_at
+      - assigned_to
+      - company
+      - company_inn
+      - company_name
+      - created_at
+      - created_by
+      - current_revision_id
+      - id
+      - lock_version
+      - number
+      - product
+      - product_name
+      - risk_level
+      - status
+      - status_changed_at
+      - term_months
+      - updated_at
     SystemRoleEnum:
       enum:
       - client

@@ -180,6 +180,45 @@ def run(base_url, password, verify_application=None):
             )
             check(len(reviewed["revisions"][0]["checks"]) == 6, "Retry must preserve prior checks")
         check(reviewed["status"] == "review", f"{scenario}: review state missing")
+        actions = {item["action"]: item for item in reviewed["available_actions"]}
+        check(actions["decide"]["reason_code"] == "role_required", "Client must not decide")
+        queue = staff.request(
+            "GET", f"/api/v1/staff/applications/?assignment=free&search={draft['number']}"
+        )
+        check(queue["count"] == 1, "Unassigned application missing from free queue")
+        row = queue["results"][0]
+        check(
+            "revisions" not in row and row["amount"] == payload["amount"],
+            "Queue must use a compact current-revision projection",
+        )
+        reviewed = staff.request(
+            "POST",
+            f"/api/v1/staff/applications/{draft['id']}/claim/",
+            {"lock_version": reviewed["lock_version"]},
+        )
+        if scenario == "approval":
+            mine = staff.request(
+                "GET", f"/api/v1/staff/applications/?assignment=mine&search={draft['number']}"
+            )
+            check(mine["count"] == 1, "Assigned application missing from my queue")
+            reviewed = staff.request(
+                "POST",
+                f"/api/v1/staff/applications/{draft['id']}/release/",
+                {"lock_version": reviewed["lock_version"]},
+            )
+            check(reviewed["assigned_to"] is None, "Release did not clear assignment")
+            reviewed = staff.request(
+                "POST",
+                f"/api/v1/staff/applications/{draft['id']}/claim/",
+                {"lock_version": reviewed["lock_version"]},
+            )
+        check(
+            any(
+                item["action"] == "decide" and item["allowed"]
+                for item in reviewed["available_actions"]
+            ),
+            "Assigned specialist must be able to run the policy",
+        )
         decided = staff.request(
             "POST",
             f"/api/v1/staff/applications/{draft['id']}/decide/",
@@ -191,6 +230,7 @@ def run(base_url, password, verify_application=None):
                 decided["status"] == "rejected" and decision["offer"] is None,
                 "Negative checks must reject without an offer",
             )
+            check(decided["assigned_to"] is None, "Rejection must release assignment")
         elif scenario == "counteroffer":
             check(decision["outcome"] == "counteroffer", "Counteroffer missing")
             check(

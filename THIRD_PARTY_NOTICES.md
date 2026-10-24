@@ -27,3 +27,19 @@
 Источники: [Django](https://www.djangoproject.com/), [DRF](https://github.com/encode/django-rest-framework), [drf-spectacular](https://github.com/tfranzel/drf-spectacular), [sidecar](https://github.com/tfranzel/drf-spectacular-sidecar), [PostgreSQL](https://www.postgresql.org/), [psycopg](https://www.psycopg.org/), [Gunicorn](https://gunicorn.org/), [WhiteNoise](https://whitenoise.readthedocs.io/), остальные пакеты — соответствующие PyPI-проекты из lock-файла.
 
 Навыки в локальной игнорируемой папке `skills/` используются при разработке и исключены из Docker-контекста; их лицензии остаются в исходных репозиториях. Скоринг, seeds и адаптеры написаны для этого проекта. В runtime не включён код Repowise.
+
+## Frontend
+
+Дизайн-система включена только в frontend. Версии зафиксированы в `frontend/package-lock.json`; исходные LICENSE/NOTICE сохраняются в npm-пакетах. Шрифты и изображения с внешних CDN не загружаются; используются системные шрифты. PNG из навыка — референсы, не runtime-ресурсы.
+
+| Компонент | Лицензия по метаданным пакета |
+|---|---|
+| React, React DOM, React Router, TanStack Query | MIT |
+| Alfa Core Components, config, stack-context, icons-logotype | MIT |
+| React Hook Form, resolvers, Zod | MIT |
+| Vite, Vitest, Prettier, openapi-typescript | MIT |
+| TypeScript, Playwright | Apache-2.0 |
+| axe-core / @axe-core/playwright (тестирование) | MPL-2.0 |
+| Nginx | BSD-2-Clause |
+
+Список включает основные прямые зависимости; транзитивные лицензии не заменяются этой сводкой. Полный npm tree и тексты лицензий доступны в установленном `node_modules`. Это не разрешение на использование бренда банка вне хакатонного прототипа.

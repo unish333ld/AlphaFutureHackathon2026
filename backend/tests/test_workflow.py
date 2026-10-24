@@ -41,6 +41,7 @@ def app_action(api, user, app, action, *, staff=False, **payload):
 
 def offer_for(api, demo, app):
     app_action(api, demo["client"], app, "submit")
+    app_action(api, demo["specialist"], app, "claim", staff=True)
     result = app_action(api, demo["specialist"], app, "decide", staff=True)
     return result["revisions"][0]["assessment"]["decision"]["offer"]
 
@@ -109,7 +110,9 @@ def test_complete_flow_idempotency_and_persistence(demo, api):
         ]
         == result["id"]
     )
-    assert list(app.events.values_list("to_status", flat=True)) == [
+    assert list(
+        app.events.exclude(event_type__startswith="assignment_").values_list("to_status", flat=True)
+    ) == [
         "draft",
         "submitted",
         "checking",
@@ -145,6 +148,7 @@ def test_counteroffer_respects_affordability(demo, api):
 def test_negative_check_is_explained_rejection(demo, api):
     app = demo["applications"]["rejected"]
     app_action(api, demo["client"], app, "submit")
+    app_action(api, demo["specialist"], app, "claim", staff=True)
     result = app_action(api, demo["specialist"], app, "decide", staff=True)
     decision = result["revisions"][0]["assessment"]["decision"]
     assert result["status"] == "rejected" and decision["reason_code"] == "negative_check"
@@ -164,6 +168,7 @@ def test_technical_error_can_retry_without_credit_rejection(demo, api):
 def test_staff_information_request_after_assessment(demo, api):
     app = demo["applications"]["approval"]
     app_action(api, demo["client"], app, "submit")
+    app_action(api, demo["specialist"], app, "claim", staff=True)
     result = app_action(
         api,
         demo["specialist"],
@@ -398,6 +403,7 @@ def test_seed_is_idempotent(demo):
 def test_decision_uses_product_snapshot(demo, api):
     app = demo["applications"]["approval"]
     app_action(api, demo["client"], app, "submit")
+    app_action(api, demo["specialist"], app, "claim", staff=True)
     original_rate = app.product.annual_rate
     app.product.annual_rate += Decimal(1)
     app.product.save()

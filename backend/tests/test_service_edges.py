@@ -97,6 +97,9 @@ def test_check_attempt_limit_preserves_history_and_allows_specialist_retry(demo,
     services.submit_application(demo["client"], app.id, 0)
     for attempt in range(2, 6):
         app.refresh_from_db()
+        if attempt == 2:
+            services.claim_application(demo["specialist"], app.id, app.lock_version)
+            app.refresh_from_db()
         user = demo["specialist"] if attempt == 2 else demo["client"]
         services.retry_checks(user, app.id, app.lock_version)
     app.refresh_from_db()
@@ -133,6 +136,8 @@ def test_inactive_registry_is_negative_check_not_technical_error(demo):
     app.refresh_from_db()
     assert app.status == "review"
     assert app.revisions.get().checks.get(kind="registry").status == "failed"
+    services.claim_application(demo["specialist"], app.id, app.lock_version)
+    app.refresh_from_db()
     services.make_decision(demo["specialist"], app.id, app.lock_version)
     app.refresh_from_db()
     assert app.status == "rejected"
@@ -144,6 +149,8 @@ def test_expiration_command_is_idempotent_and_does_not_expire_signed_deals(
     signed = signed_deal_factory("approval")
     pending = demo["applications"]["counteroffer"]
     services.submit_application(demo["client"], pending.id, 0)
+    pending.refresh_from_db()
+    services.claim_application(demo["specialist"], pending.id, pending.lock_version)
     pending.refresh_from_db()
     services.make_decision(demo["specialist"], pending.id, pending.lock_version)
     offer = Offer.objects.get(decision__assessment__revision__application=pending)
@@ -233,6 +240,8 @@ def test_concurrent_submission_and_acceptance_create_records_once(demo, action):
     offer = None
     if action == "accept":
         services.submit_application(demo["client"], app.id, 0)
+        app.refresh_from_db()
+        services.claim_application(demo["specialist"], app.id, app.lock_version)
         app.refresh_from_db()
         services.make_decision(demo["specialist"], app.id, app.lock_version)
         offer = Offer.objects.get(decision__assessment__revision__application=app)

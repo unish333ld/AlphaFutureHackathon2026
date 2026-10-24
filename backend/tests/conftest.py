@@ -56,6 +56,8 @@ def reviewed_app(demo):
 
 @pytest.fixture
 def offer(demo, reviewed_app):
+    services.claim_application(demo["specialist"], reviewed_app.id, reviewed_app.lock_version)
+    reviewed_app.refresh_from_db()
     services.make_decision(demo["specialist"], reviewed_app.id, reviewed_app.lock_version)
     return Offer.objects.get(decision__assessment__revision__application=reviewed_app)
 
@@ -72,6 +74,8 @@ def signed_deal_factory(demo):
     def create(scenario="approval"):
         app = demo["applications"][scenario]
         services.submit_application(demo["client"], app.id, app.lock_version)
+        app.refresh_from_db()
+        services.claim_application(demo["specialist"], app.id, app.lock_version)
         app.refresh_from_db()
         services.make_decision(demo["specialist"], app.id, app.lock_version)
         offer = Offer.objects.get(decision__assessment__revision__application=app)

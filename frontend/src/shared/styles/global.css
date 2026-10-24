@@ -1,0 +1,123 @@
+@import "@alfalab/core-components/vars/colors-bluetint.css";
+@import "@alfalab/core-components/vars/colors-addons.css";
+@import "@alfalab/core-components/vars/shadows-bluetint.css";
+@import "@alfalab/core-components/vars/border-radius.css";
+@import "@alfalab/core-components/vars/gaps.css";
+@import "@alfalab/core-components/vars/typography-vars.css";
+@import "@alfalab/core-components/vars/common.css";
+@import "@alfalab/core-components/vars/colors-brand.css";
+:root[data-theme="credit"] {
+  /* Supported design tokens: red accent with readable small white labels. */
+  --color-light-accent-primary: #d02a20;
+  --color-light-accent-primary-hover: #bb281e;
+  --color-light-accent-primary-press: #a9231a;
+  --color-light-text-secondary: #4c5562;
+  --color-light-text-tertiary: #4c5562;
+  font-family: Arial, Helvetica, system-ui, sans-serif;
+  color: #202329;
+  background: #f3f4f6;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  min-width: 320px;
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+button,
+a,
+input,
+textarea,
+select {
+  touch-action: manipulation;
+}
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[tabindex]:not([tabindex="-1"]):focus-visible {
+  outline: 3px solid #265bcc;
+  outline-offset: 3px;
+}
+h1,
+h2,
+h3,
+p {
+  overflow-wrap: anywhere;
+}
+h1 {
+  font-size: 36px;
+  line-height: 1.16;
+  letter-spacing: -1.1px;
+  margin: 0 0 12px;
+}
+h1[tabindex="-1"]:focus {
+  /* Route announcements are not interactive keyboard targets. */
+  outline: none;
+}
+h2 {
+  font-size: 21px;
+  line-height: 1.3;
+}
+h3 {
+  font-size: 17px;
+  line-height: 1.4;
+}
+p {
+  line-height: 1.6;
+}
+::selection {
+  background: #fde0dc;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+th {
+  text-align: left;
+  font-weight: 500;
+  color: #5b6470;
+}
+th,
+td {
+  padding: 16px;
+  border-bottom: 1px solid #eceef1;
+}
+time {
+  font-variant-numeric: tabular-nums;
+}
+::backdrop {
+  background: #0008;
+}
+@media (max-width: 600px) {
+  h1 {
+    font-size: 28px;
+    letter-spacing: -0.7px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

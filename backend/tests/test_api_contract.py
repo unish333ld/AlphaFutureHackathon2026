@@ -46,6 +46,8 @@ PROTECTED_OPERATIONS = [
     ("get", "staff/applications/{id}/"),
     ("post", "staff/applications/{id}/request-information/"),
     ("post", "staff/applications/{id}/decide/"),
+    ("post", "staff/applications/{id}/claim/"),
+    ("post", "staff/applications/{id}/release/"),
     ("get", "offers/"),
     ("get", "offers/{id}/"),
     ("post", "offers/{id}/accept/"),

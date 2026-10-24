@@ -1,5 +1,7 @@
 # Архитектура и состояния
 
+Действующий [стек](stack.md), [контракт frontend](frontend-integration.md) и [интерфейс](frontend.md) дополняют этот документ. Frontend — React/TypeScript strict/Vite, Core Components, CSS Modules/Grid/Flexbox/медиазапросы, React Router, TanStack Query, RHF/Zod; Nginx обеспечивает один origin. Backend — Python/Django/DRF/PostgreSQL; sessions/HttpOnly/CSRF, drf-spectacular/OpenAPI/Swagger; Docker Compose, pytest/pytest-django, Vitest/Playwright.
+
 Django — модульный монолит. `api` определяет HTTP/сериализаторы/OpenAPI; предметные приложения хранят ORM-модели. `applications/services.py` и `agreements/services.py` выполняют действия; `checks/adapters.py` — локальные моки; `decisions/policy.py` — скоринг и отдельная кредитная политика; `products/calculations.py` — единый расчёт платежа.
 
 ```mermaid
@@ -10,23 +12,35 @@ stateDiagram-v2
     checking --> checking : error / retry
     checking --> needs_info : missing
     checking --> review
-    review --> needs_info : request information
+    review --> needs_info : assigned specialist requests information
     needs_info --> submitted : new revision
     review --> submitted : revise
-    review --> rejected
-    review --> offered : approval / counteroffer
+    review --> rejected : assigned specialist / policy
+    review --> offered : assigned specialist / approval or counteroffer
     offered --> submitted : revise / supersede
     offered --> declined
     offered --> expired
     offered --> accepted
     accepted --> expired : signing deadline
     accepted --> signed : simulation
-    signed --> issued : specialist / idempotency
+    signed --> issued : assigned specialist / idempotency
 ```
 
 Действие проверяет права, берёт `select_for_update` на заявку, сравнивает `lock_version` и сохраняет переход, связанную запись и событие в одной транзакции. Моки синхронные и локальные. Реальные сетевые адаптеры в будущем должны выполняться вне транзакции с повторной проверкой ревизии после ответа. Новая ревизия сохраняет старую историю и помечает непринятое предложение `superseded`.
 
-Queryset ограничивает доступ компанией пользователя; отдельные can_submit/can_sign проверяются сервером. Специалист — самостоятельная роль, выдача доступна ей. Сессия Django использует HttpOnly/SameSite cookie и CSRF, включая login. Swagger UI поставляется через sidecar и WhiteNoise без обязательного CDN. React в дальнейшем использует тот же origin.
+Queryset ограничивает доступ компанией пользователя; отдельные can_submit/can_sign проверяются сервером. Специалист — самостоятельная роль, выдача доступна ей. Сессия Django использует HttpOnly/SameSite cookie и CSRF, включая login. Swagger UI поставляется через sidecar и WhiteNoise без обязательного CDN. React использует тот же origin через Vite proxy либо Nginx; формы/кеш изолированы по пользователю и очищаются при смене учётной записи.
+
+Назначение — ортогональное состояние: `free → assigned_to=current specialist → free`, не новый кредитный статус. Claim/release блокируют ту же строку и увеличивают lock_version без изменения status_changed_at; повтор собственного claim с актуальной версией не меняет данные. checking/review/needs_info/offered/accepted/signed допускают назначение. Уточнение, решение, банковский повтор проверки и новая выдача требуют исполнителя. Ожидание клиента/новая ревизия сохраняют назначение; issued/rejected/declined/expired освобождают с событием. Клиентские действия не блокируются назначением.
+
+```mermaid
+stateDiagram-v2
+    [*] --> free
+    free --> assigned : claim in eligible credit state
+    assigned --> free : own release or terminal credit state
+    assigned --> assigned : waiting for client or new revision
+```
+
+Очередь — отдельный сериализатор и коррелированные подзапросы по максимальному revision_no; история не загружается, количество SQL не растёт с числом строк. Карточка возвращает available_actions с безопасными причинами; сервисы проверяют условия повторно. Assessment хранит checks_attempt: решение запрещено по другой/неполной попытке или оценке, созданной раньше результатов проверок.
 
 ## Демонстрационные допущения
 
@@ -40,3 +54,5 @@ Queryset ограничивает доступ компанией пользов
 - Один договор — одна полная выдача; тот же ключ и договор возвращают прежний результат. Новый ключ после выдачи или прежний ключ с другим договором дают 409.
 
 ИИ, внешние банковские системы, SMS/email, документы и платные API для этого backend не требуются. Реальный банковский режим не включается переключателем DEMO_MODE.
+
+Текущий релиз не включает прогноз денежных потоков, Grade A–E, банковский SLA, сложную приоритизацию и отчётность. risk_level остаётся low/medium/high; начало текущего состояния — status_changed_at. ИИ допускается только как отключаемая визуальная заготовка frontend, без backend LLM.

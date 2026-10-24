@@ -1,11 +1,17 @@
+import uuid
 from decimal import Decimal
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.utils import timezone
 
 from common.models import AppendOnlyModel, CreatedModel
+
+
+def application_number():
+    return f"AC-{uuid.uuid4().hex[:16].upper()}"
 
 
 class Application(CreatedModel):
@@ -23,6 +29,9 @@ class Application(CreatedModel):
         DECLINED = "declined", "Клиент отклонил"
         EXPIRED = "expired", "Срок предложения истёк"
 
+    number = models.CharField(
+        "Номер заявки", max_length=19, unique=True, default=application_number, editable=False
+    )
     company = models.ForeignKey(
         "companies.Company", on_delete=models.PROTECT, related_name="applications"
     )
@@ -34,6 +43,18 @@ class Application(CreatedModel):
     )
     status = models.CharField("Состояние", max_length=16, choices=Status, default=Status.DRAFT)
     lock_version = models.PositiveIntegerField("Версия для конкурентных изменений", default=0)
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="assigned_applications",
+        editable=False,
+    )
+    assigned_at = models.DateTimeField("Назначена", null=True, blank=True, editable=False)
+    status_changed_at = models.DateTimeField(
+        "Начало текущего состояния", default=timezone.now, editable=False
+    )
     updated_at = models.DateTimeField("Изменена", auto_now=True)
 
     class Meta:
@@ -43,6 +64,18 @@ class Application(CreatedModel):
         indexes = [
             models.Index(fields=["company", "-created_at"], name="app_company_created_idx"),
             models.Index(fields=["status", "created_at"], name="app_queue_idx"),
+            models.Index(
+                fields=["assigned_to", "status", "-created_at"], name="app_assignee_queue_idx"
+            ),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(assigned_to__isnull=True, assigned_at__isnull=True)
+                    | models.Q(assigned_to__isnull=False, assigned_at__isnull=False)
+                ),
+                name="application_assignment_pair",
+            ),
         ]
 
     def __str__(self):

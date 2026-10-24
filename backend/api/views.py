@@ -1,4 +1,5 @@
 from django.db import DatabaseError, connection
+from django.db.models import F, Q
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import (
     OpenApiExample,
@@ -14,7 +15,7 @@ from rest_framework.views import APIView
 
 from agreements import services as deal
 from agreements.models import Agreement, Disbursement
-from api.selectors import application_queryset
+from api.selectors import application_queryset, staff_queue_queryset
 from api.serializers import (
     AgreementSerializer,
     ApplicationCreateSerializer,
@@ -33,6 +34,8 @@ from api.serializers import (
     ProductSerializer,
     RevisionSubmitSerializer,
     SignRequestSerializer,
+    StaffApplicationListSerializer,
+    StaffQueueQuerySerializer,
     VersionSerializer,
 )
 from applications import services
@@ -144,7 +147,9 @@ class ApplicationQueryMixin:
 
     def application_response(self, app, status=200):
         fresh = get_object_or_404(application_queryset(self.request.user), pk=app.id)
-        return Response(ApplicationSerializer(fresh).data, status=status)
+        return Response(
+            ApplicationSerializer(fresh, context={"request": self.request}).data, status=status
+        )
 
 
 @extend_schema_view(
@@ -291,7 +296,8 @@ class ApplicationViewSet(
     list=extend_schema(
         tags=["Банк"],
         summary="Очередь специалиста",
-        parameters=[OpenApiParameter("status", str, enum=Application.Status.values)],
+        parameters=[StaffQueueQuerySerializer],
+        description="Пагинация по 25 строк, стабильная сортировка с UUID как вторичным ключом; NULL в конце. assignment=free — свободные, mine — назначенные текущему специалисту, all — все. risk_level=unassessed — оценка отсутствует. search — подстрока номера/названия компании/ИНН. amount, term_months и risk_level относятся строго к максимальному revision_no. История ревизий в строки не включается. status_changed_at — фактическое начало текущего кредитного статуса, не SLA банка.",
     ),
     retrieve=extend_schema(tags=["Банк"], summary="Карточка специалиста"),
 )
@@ -303,13 +309,86 @@ class StaffApplicationViewSet(
     serializer_class = ApplicationSerializer
 
     def get_serializer_class(self):
-        return ApplicationListSerializer if self.action == "list" else ApplicationSerializer
+        return StaffApplicationListSerializer if self.action == "list" else ApplicationSerializer
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return Application.objects.none()
+        if self.action != "list":
+            return super().get_queryset()
+        params = StaffQueueQuerySerializer(data=self.request.query_params)
+        params.is_valid(raise_exception=True)
+        data = params.validated_data
+        queryset = staff_queue_queryset(self.request.user)
+        if "status" in data:
+            queryset = queryset.filter(status=data["status"])
+        if data["assignment"] == "free":
+            queryset = queryset.filter(assigned_to__isnull=True)
+        elif data["assignment"] == "mine":
+            queryset = queryset.filter(assigned_to=self.request.user)
+        if "risk_level" in data:
+            risk = data["risk_level"]
+            queryset = (
+                queryset.filter(risk_level__isnull=True)
+                if risk == "unassessed"
+                else queryset.filter(risk_level=risk)
+            )
+        if data.get("search"):
+            search = data["search"]
+            queryset = queryset.filter(
+                Q(number__icontains=search)
+                | Q(company__name__icontains=search)
+                | Q(company__inn__icontains=search)
+            )
+        ordering = data["ordering"]
+        field = F(ordering.lstrip("-"))
+        return queryset.order_by(
+            field.desc(nulls_last=True) if ordering.startswith("-") else field.asc(nulls_last=True),
+            "id",
+        )
+
+    @extend_schema(
+        tags=["Банк"],
+        request=VersionSerializer,
+        responses=ACTION_RESPONSES,
+        summary="Взять свободную заявку в работу",
+        description="Только specialist, назначается текущий пользователь. Статусы: checking/review/needs_info/offered/accepted/signed. Кредитный статус не меняется. Возвращает новый lock_version и событие assignment_claimed. Повтор тем же исполнителем с актуальной версией — 200 без изменений; старая версия или другой исполнитель — 409. Чужого исполнителя переназначить нельзя.",
+    )
+    @action(detail=True, methods=["post"])
+    def claim(self, request, pk=None):
+        app = self.get_object()
+        serializer = VersionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return self.application_response(
+            services.claim_application(
+                request.user, app.id, serializer.validated_data["lock_version"]
+            )
+        )
+
+    @extend_schema(
+        tags=["Банк"],
+        request=VersionSerializer,
+        responses=ACTION_RESPONSES,
+        summary="Освободить свою заявку",
+        description="Только текущий исполнитель. Событие assignment_released, новый lock_version; кредитный статус не меняется. Чужая или свободная заявка — 409. Ожидание ответа клиента сохраняет назначение; issued/rejected/declined/expired снимают его автоматически с отдельным событием.",
+    )
+    @action(detail=True, methods=["post"])
+    def release(self, request, pk=None):
+        app = self.get_object()
+        serializer = VersionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return self.application_response(
+            services.release_application(
+                request.user, app.id, serializer.validated_data["lock_version"]
+            )
+        )
 
     @extend_schema(
         tags=["Банк"],
         request=InformationRequestInputSerializer,
         responses=ACTION_RESPONSES,
         summary="Запросить уточнение у компании",
+        description="Только назначенный текущий specialist, статусы review/checking. Свободная или чужая заявка — 409. Переход в needs_info сохраняет исполнителя; клиент отвечает новой ревизией, проверки и оценка выполняются заново.",
     )
     @action(detail=True, methods=["post"], url_path="request-information")
     def request_information(self, request, pk=None):
@@ -328,7 +407,7 @@ class StaffApplicationViewSet(
         request=VersionSerializer,
         responses=ACTION_RESPONSES,
         summary="Принять решение по демонстрационной политике",
-        description="Только specialist. Сервер использует сохранённую оценку текущей ревизии: одобрение, уменьшенная сумма или отказ. Ставку и решение нельзя назначить в теле запроса.",
+        description="Только назначенный текущий specialist, статус review и актуальный lock_version. Сотрудник запускает серверную политику; тело не принимает исход, ставку или сумму. Используется assessment текущей (максимальный revision_no) отправленной ревизии и её checks_attempt: полный набор registry/credit_history/financial без missing/error, оценка создана после этих проверок. Новая попытка делает старую оценку непригодной. Результат approved/counteroffer/rejected, reason_code, explanation, policy_version и offer находятся в revisions[0].assessment.decision; ссылки assessment/revision и checks_attempt явные. Повтор после решения — 409, нового решения/предложения не создаёт. Конфликт назначения, версии, состояния или устаревшей оценки — 409: обновите карточку и предложите пользователю проверить данные. Положительный результат сохраняет исполнителя при ожидании клиента; отказ освобождает назначение.",
     )
     @action(detail=True, methods=["post"])
     def decide(self, request, pk=None):
@@ -372,7 +451,8 @@ class OfferViewSet(viewsets.ReadOnlyModelViewSet):
         )
         return Response(
             ApplicationSerializer(
-                get_object_or_404(application_queryset(request.user), pk=app.id)
+                get_object_or_404(application_queryset(request.user), pk=app.id),
+                context={"request": request},
             ).data
         )
 
@@ -427,7 +507,7 @@ class AgreementViewSet(viewsets.ReadOnlyModelViewSet):
             409: ErrorSerializer,
         },
         summary="Условно подписать принятую версию договора",
-        description="Требует can_sign, document_hash и confirm_simulation=true. Юридически значимая электронная подпись не выполняется.",
+        description="Требует can_sign, document_hash и confirm_simulation=true; назначение специалиста не ограничивает клиента. Срок подписи — sign_before. Юридически значимая электронная подпись не выполняется. После успеха GET /api/v1/applications/{application_id}/ возвращает новый lock_version; application_id есть у предложения.",
     )
     @action(detail=True, methods=["post"])
     def sign(self, request, pk=None):
@@ -462,7 +542,7 @@ class AgreementViewSet(viewsets.ReadOnlyModelViewSet):
             )
         ],
         summary="Выполнить моделируемую выдачу",
-        description="Только specialist. Денежных переводов нет. Один договор — одна выдача; повторный ключ с другим договором даёт 409.",
+        description="Новая выдача: только назначенный текущий specialist, signed, подпись и неизменённые условия. Денежных переводов нет. Idempotency-Key обязателен и является UUID. Один договор — одна выдача. Тот же ключ + тот же договор возвращает прежний результат (200), даже с устаревшим lock_version и после автоматического освобождения назначения. lock_version — токен конкурентности, не финансовое содержимое повтора; иных изменяемых полей нет. Добавленные amount/status и другие поля — 400. Ключ другого договора или новый ключ для уже выданного — 409. После успеха GET карточки даёт новый lock_version и issued, назначение снято. При 409 обновите карточку и проверьте данные без автоматического повтора значимого действия.",
     )
     @action(detail=True, methods=["post"], permission_classes=[IsSpecialist])
     def disburse(self, request, pk=None):

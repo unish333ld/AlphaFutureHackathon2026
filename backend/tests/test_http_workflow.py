@@ -73,6 +73,12 @@ def test_credit_lifecycle_over_real_http_with_sessions_csrf_and_role_changes(dem
     )
     assert reviewed["status"] == "review"
     csrf = login("specialist")
+    reviewed = http(
+        "POST",
+        f"/api/v1/staff/applications/{created['id']}/claim/",
+        {"lock_version": reviewed["lock_version"]},
+        csrf=csrf,
+    )
     decided = http(
         "POST",
         f"/api/v1/staff/applications/{created['id']}/decide/",

@@ -11,5 +11,13 @@ skills
 htmlcov
 reports
 backend/staticfiles
-docs
+docs/*
+!docs/openapi.yaml
 .DS_Store
+frontend/node_modules
+frontend/dist
+frontend/test-results
+frontend/playwright-report
+frontend/test-results-linux
+frontend/playwright-report-linux
+frontend/.env*
