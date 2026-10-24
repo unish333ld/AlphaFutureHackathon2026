@@ -16,6 +16,7 @@ from api.views import (
     ProductViewSet,
     StaffApplicationViewSet,
 )
+from assistant.views import ConversationMessagesView, ConversationViewSet
 
 router = DefaultRouter()
 router.register("companies", CompanyViewSet, basename="company")
@@ -25,6 +26,7 @@ router.register("staff/applications", StaffApplicationViewSet, basename="staff-a
 router.register("offers", OfferViewSet, basename="offer")
 router.register("agreements", AgreementViewSet, basename="agreement")
 router.register("disbursements", DisbursementViewSet, basename="disbursement")
+router.register("assistant/conversations", ConversationViewSet, basename="assistant-conversation")
 
 urlpatterns = [
     path("", RedirectView.as_view(url="/api/docs/", permanent=False)),
@@ -38,6 +40,11 @@ urlpatterns = [
     path("api/v1/session/login/", SessionLoginView.as_view(), name="session-login"),
     path("api/v1/session/logout/", SessionLogoutView.as_view(), name="session-logout"),
     path("api/v1/me/", MeView.as_view(), name="me"),
+    path(
+        "api/v1/assistant/conversations/<uuid:conversation_id>/messages/",
+        ConversationMessagesView.as_view(),
+        name="assistant-messages",
+    ),
     path("api/v1/calculator/payment/", CalculatorView.as_view(), name="calculator"),
     path("api/v1/", include(router.urls)),
 ]

@@ -1,6 +1,6 @@
 # Сторонние компоненты
 
-Прототип создан для хакатонного кейса; это не официальный банковский сервис. Синтетические данные, локальные моки и демонстрационная политика описаны в `docs/architecture.md`. Банковские API, ML/LLM-модели, реальные финансовые документы и дизайн-система в текущий backend не включены.
+Прототип создан для хакатонного кейса; это не официальный банковский сервис. Синтетические данные, локальные моки и демонстрационная политика описаны в `docs/architecture.md`. Банковские API, реальные финансовые документы и дизайн-система в текущий backend не включены. ИИ-модель не входит в Docker-образ и запускается отдельно только при включении помощника.
 
 Версии Python-пакетов закреплены в `backend/requirements.lock`; дополнительные инструменты покрытия тестов — в `backend/requirements-test.lock`. Лицензии проверены по метаданным установленных дистрибутивов. Полные уведомления/тексты сохраняются в `*.dist-info/licenses`, `METADATA` и исходных пакетах, включая Docker-образ.
 
@@ -23,6 +23,8 @@
 | coverage.py (только тестирование) | Apache-2.0 |
 | uritemplate | BSD-3-Clause OR Apache-2.0 |
 | Базовые образы python и postgres | Содержат системные компоненты со своими лицензиями и уведомлениями |
+
+Необязательный кандидат для демонстрации Савелия — `Qwen/Qwen2.5-7B-Instruct` с открытыми весами (Apache-2.0), например квантизация `qwen2.5:7b-instruct-q4_0` для Ollama. Перед финальной поставкой нужно закрепить конкретный тег/хеш модели, источник квантизации и воспроизвести запуск на целевой машине. Ни веса, ни сервер Ollama в этот репозиторий не включены. Источники: [карточка модели Qwen](https://huggingface.co/Qwen/Qwen2.5-7B-Instruct), [каталог Ollama](https://ollama.com/library/qwen2.5:7b-instruct-q4_0).
 
 Источники: [Django](https://www.djangoproject.com/), [DRF](https://github.com/encode/django-rest-framework), [drf-spectacular](https://github.com/tfranzel/drf-spectacular), [sidecar](https://github.com/tfranzel/drf-spectacular-sidecar), [PostgreSQL](https://www.postgresql.org/), [psycopg](https://www.psycopg.org/), [Gunicorn](https://gunicorn.org/), [WhiteNoise](https://whitenoise.readthedocs.io/), остальные пакеты — соответствующие PyPI-проекты из lock-файла.
 

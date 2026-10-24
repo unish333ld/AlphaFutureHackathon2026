@@ -607,6 +607,136 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: ''
+  /api/v1/assistant/conversations/:
+    get:
+      operationId: v1_assistant_conversations_list
+      summary: Мои диалоги
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - Савелий
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedConversationList'
+          description: ''
+    post:
+      operationId: v1_assistant_conversations_create
+      summary: Начать диалог для своей компании
+      tags:
+      - Савелий
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateConversationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CreateConversationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CreateConversationRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
+          description: ''
+  /api/v1/assistant/conversations/{conversation_id}/messages/:
+    get:
+      operationId: v1_assistant_conversations_messages_list
+      summary: Сообщения моего диалога
+      parameters:
+      - in: path
+        name: conversation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Савелий
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Message'
+          description: ''
+    post:
+      operationId: v1_assistant_conversations_messages_create
+      description: Требует session cookie, CSRF и актуальную версию диалога. Помощник
+        не меняет заявку и не принимает кредитное решение.
+      summary: Спросить Савелия
+      parameters:
+      - in: path
+        name: conversation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Савелий
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssistantReply'
+          description: ''
+  /api/v1/assistant/conversations/{id}/:
+    get:
+      operationId: v1_assistant_conversations_retrieve
+      summary: Мой диалог
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Диалог Савелия.
+        required: true
+      tags:
+      - Савелий
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
+          description: ''
   /api/v1/calculator/payment/:
     post:
       operationId: v1_calculator_payment_create
@@ -1501,6 +1631,23 @@ components:
       - risk_level
       - rules_version
       - score
+    AssistantReply:
+      type: object
+      properties:
+        conversation_id:
+          type: string
+          format: uuid
+        version:
+          type: integer
+        model_status:
+          $ref: '#/components/schemas/ModelStatusEnum'
+        message:
+          $ref: '#/components/schemas/Message'
+      required:
+      - conversation_id
+      - message
+      - model_status
+      - version
     Check:
       type: object
       properties:
@@ -1633,6 +1780,55 @@ components:
       description: |-
         * `active` - Действует
         * `inactive` - Деятельность прекращена
+    Conversation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        company:
+          type: string
+          format: uuid
+          readOnly: true
+        application:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        version:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Создано
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - application
+      - company
+      - created_at
+      - id
+      - updated_at
+      - version
+    CreateConversationRequest:
+      type: object
+      description: Reject extra fields instead of silently dropping status/rate/role
+        injection.
+      properties:
+        company_id:
+          type: string
+          format: uuid
+        application_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - company_id
     CreditDecision:
       type: object
       properties:
@@ -1888,7 +2084,7 @@ components:
           readOnly: true
         role:
           allOf:
-          - $ref: '#/components/schemas/RoleEnum'
+          - $ref: '#/components/schemas/MemberRoleEnum'
           readOnly: true
           title: Роль в компании
         can_submit:
@@ -1909,6 +2105,59 @@ components:
       - can_submit
       - company
       - role
+    MemberRoleEnum:
+      enum:
+      - owner
+      - director
+      - accountant
+      type: string
+      description: |-
+        * `owner` - Собственник
+        * `director` - Директор
+        * `accountant` - Бухгалтер
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        role:
+          allOf:
+          - $ref: '#/components/schemas/MessageRoleEnum'
+          readOnly: true
+        content:
+          type: string
+          readOnly: true
+        facts:
+          readOnly: true
+        suggested_draft:
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Создано
+      required:
+      - content
+      - created_at
+      - facts
+      - id
+      - role
+      - suggested_draft
+    MessageRoleEnum:
+      enum:
+      - user
+      - assistant
+      type: string
+      description: |-
+        * `user` - Клиент
+        * `assistant` - Савелий
+    ModelStatusEnum:
+      enum:
+      - available
+      type: string
+      description: '* `available` - available'
     Offer:
       type: object
       properties:
@@ -2093,6 +2342,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Company'
+    PaginatedConversationList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Conversation'
     PaginatedDisbursementList:
       type: object
       required:
@@ -2461,16 +2733,21 @@ components:
         * `low` - Низкий
         * `medium` - Средний
         * `high` - Высокий
-    RoleEnum:
-      enum:
-      - owner
-      - director
-      - accountant
-      type: string
-      description: |-
-        * `owner` - Собственник
-        * `director` - Директор
-        * `accountant` - Бухгалтер
+    SendMessageRequest:
+      type: object
+      description: Reject extra fields instead of silently dropping status/rate/role
+        injection.
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        expected_version:
+          type: integer
+          minimum: 0
+      required:
+      - expected_version
+      - text
     SignRequestRequest:
       type: object
       description: Reject extra fields instead of silently dropping status/rate/role

@@ -19,6 +19,10 @@ erDiagram
     CreditProduct ||--o{ Offer : identifies
     Offer ||--o| Agreement : accepts
     Agreement ||--o| Disbursement : simulates
+    User ||--o{ Conversation : owns
+    Company ||--o{ Conversation : scopes
+    Application |o--o{ Conversation : contextualizes
+    Conversation ||--o{ Message : contains
 ```
 
 | Модель | Поля и ограничения |
@@ -37,6 +41,8 @@ erDiagram
 | Agreement | offer OneToOne, number unique, terms_snapshot, document_hash, signed_by PROTECT, signed_at, signature_mode=simulation. CHECK согласованности подписи |
 | Disbursement | agreement OneToOne, idempotency_key unique, amount>0, status=completed, issued_at, is_simulated=true |
 | ApplicationEvent | application PROTECT, actor SET_NULL, event_type, from/to_status, details, created_at. Индекс истории |
+| Conversation | user/company PROTECT, application PROTECT nullable, version, timestamps. Только владелец с активным членством видит диалог |
+| Message | conversation PROTECT, role user/assistant, content, серверные facts и suggested_draft, created_at. История append-only |
 
 JSON-снимки имеют `schema_version=1`, формируются сервером из валидированных полей и не принимают произвольное содержимое от клиента. `input_snapshot` фиксирует компанию, настройки продукта и месячные финансы. Сумма/цель/срок остаются колонками ревизии. `schedule` содержит метод расчёта, комиссии и строки по номерам месяцев. `terms_snapshot` фиксирует принятое предложение и график; SHA-256 вычисляется по каноническому JSON с сортировкой ключей.
 

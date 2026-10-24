@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     "decisions",
     "offers",
     "agreements",
+    "assistant",
     "api",
 ]
 MIDDLEWARE = [
@@ -116,9 +117,15 @@ REST_FRAMEWORK = {
     "COERCE_DECIMAL_TO_STRING": True,
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     "DEFAULT_THROTTLE_CLASSES": ["rest_framework.throttling.UserRateThrottle"],
-    "DEFAULT_THROTTLE_RATES": {"user": "300/min", "login": "10/min"},
+    "DEFAULT_THROTTLE_RATES": {"user": "300/min", "login": "10/min", "assistant": "10/min"},
     "EXCEPTION_HANDLER": "common.exceptions.exception_handler",
 }
+
+AI_ENABLED = os.getenv("AI_ENABLED", "false").lower() == "true"
+LLM_BASE_URL = os.getenv("LLM_BASE_URL", "http://host.docker.internal:11434/v1").rstrip("/")
+LLM_API_KEY = os.getenv("LLM_API_KEY", "")
+LLM_MODEL = os.getenv("LLM_MODEL", "qwen2.5:7b-instruct-q4_0")
+LLM_TIMEOUT_SECONDS = min(max(float(os.getenv("LLM_TIMEOUT_SECONDS", "40")), 1), 40)
 SPECTACULAR_SETTINGS = {
     "TITLE": "Умный кредитный кабинет предпринимателя",
     "DESCRIPTION": (
