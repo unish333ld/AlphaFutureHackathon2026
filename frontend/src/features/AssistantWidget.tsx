@@ -8,6 +8,9 @@ import {
 import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "react-router-dom";
+// Responsive Button remounts at its breakpoint and loses keyboard focus.
+// The fixed Core variant keeps one DOM node; panel layout remains responsive.
+import { ButtonDesktop as Button } from "@alfalab/core-components/button/desktop";
 import { useAuth } from "../app/auth";
 import { useCatalogs } from "../app/queries";
 import {
@@ -16,14 +19,7 @@ import {
   type AssistantMessage,
 } from "../shared/api/client";
 import { ApiError } from "../shared/api/errors";
-import {
-  Button,
-  Choice,
-  Dialog,
-  Loading,
-  Notice,
-  Textarea,
-} from "../shared/ui/kit";
+import { Choice, Dialog, Loading, Notice, Textarea } from "../shared/ui/kit";
 import { AssistantFacts } from "./AssistantFacts";
 import { parseAssistantDraft, type AssistantDraft } from "./assistantDraft";
 import { useAssistantForm, type FormSnapshot } from "./AssistantFormContext";
@@ -714,7 +710,13 @@ export default function AssistantWidget() {
                         ))}
                       </ul>
                     ) : null}
-                    {message.reply_type === "missing_information" ? (
+                    {message.reply_type === "missing_information" &&
+                    message.questions?.some((question) =>
+                      /продукт/i.test(question),
+                    ) &&
+                    !message.facts.some(
+                      (fact) => fact.source === "list_credit_products",
+                    ) ? (
                       <div className={s.prompts}>
                         {products.data?.map((product) => (
                           <button

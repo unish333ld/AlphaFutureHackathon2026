@@ -129,13 +129,16 @@ REST_FRAMEWORK = {
 AI_ENABLED = os.getenv("AI_ENABLED", "false").lower() == "true"
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "compatible").lower()
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", "http://host.docker.internal:11434/v1").rstrip("/")
-LLM_API_KEY = os.getenv("LLM_API_KEY", "")
-LLM_MODEL = os.getenv("LLM_MODEL", "qwen2.5:7b-instruct-q4_0")
+LLM_API_KEY = os.getenv("LLM_API_KEY", "") or (
+    os.getenv("OPENROUTER_API_KEY", "") if LLM_PROVIDER == "openrouter" else ""
+)
+LLM_OPENROUTER_FREE_ONLY = os.getenv("LLM_OPENROUTER_FREE_ONLY", "true").lower() == "true"
+LLM_MODEL = os.getenv("LLM_MODEL", "qwen3:4b-instruct-2507-q4_K_M")
 LLM_FALLBACK_MODELS = tuple(
     model.strip() for model in os.getenv("LLM_FALLBACK_MODELS", "").split(",") if model.strip()
 )
 LLM_LOCAL_FALLBACK_BASE_URL = os.getenv("LLM_LOCAL_FALLBACK_BASE_URL", "").rstrip("/")
-LLM_LOCAL_FALLBACK_MODEL = os.getenv("LLM_LOCAL_FALLBACK_MODEL", "qwen2.5:7b-instruct-q4_0")
+LLM_LOCAL_FALLBACK_MODEL = os.getenv("LLM_LOCAL_FALLBACK_MODEL", "qwen3:4b-instruct-2507-q4_K_M")
 LLM_TIMEOUT_SECONDS = min(max(float(os.getenv("LLM_TIMEOUT_SECONDS", "40")), 1), 40)
 LLM_TOTAL_TIMEOUT_SECONDS = min(max(float(os.getenv("LLM_TOTAL_TIMEOUT_SECONDS", "70")), 1), 75)
 LLM_MAX_OUTPUT_TOKENS = min(max(int(os.getenv("LLM_MAX_OUTPUT_TOKENS", "768")), 128), 2048)

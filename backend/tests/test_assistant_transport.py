@@ -51,6 +51,10 @@ def test_openrouter_uses_explicit_free_models_and_pins_selected_model(settings):
         "nvidia/nemotron-3.5-lightning:free",
     ]
     assert calls[0][1]["tool_choice"] == "auto"
+    assert calls[0][1]["provider"] == {
+        "require_parameters": True,
+        "max_price": {"prompt": 0, "completion": 0, "request": 0},
+    }
     assert calls[1][1]["models"][0] == "nvidia/nemotron-3.5-lightning:free"
     assert "tools" not in calls[1][1]
     assert all(model.endswith(":free") for model in calls[1][1]["models"])
@@ -242,3 +246,69 @@ def test_saturated_provider_slot_fails_fast_and_does_not_queue_network(settings)
     # A transport failure must release the slot for a later explicit request.
     with patch("assistant.llm.urlopen", return_value=response({"content": "{}"})):
         assert chat([])["content"] == "{}"
+
+
+def test_paid_slug_is_not_called_with_free_only_and_uses_local_model(settings):
+    configure_router(settings)
+    settings.LLM_MODEL = "nvidia/nemotron-3-super-120b-a12b"
+    with patch("assistant.llm.urlopen", return_value=response({"content": "{}"})) as send:
+        result = chat([])
+    assert result["_backend"] == "local"
+    assert send.call_count == 1
+    assert send.call_args.args[0].full_url == "http://127.0.0.1:11434/v1/chat/completions"
+
+
+@pytest.mark.parametrize(
+    "provider,expected", [("openrouter", "router-test-key"), ("compatible", "")]
+)
+def test_openrouter_key_alias_is_never_forwarded_to_a_compatible_endpoint(
+    monkeypatch, provider, expected
+):
+    import runpy
+    from pathlib import Path
+
+    monkeypatch.setenv("LLM_PROVIDER", provider)
+    monkeypatch.setenv("LLM_API_KEY", "")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "router-test-key")
+    config = runpy.run_path(str(Path(__file__).parents[1] / "config/settings.py"))
+    assert config["LLM_API_KEY"] == expected
+
+
+def test_live_capability_command_requires_real_probe_and_never_displays_key(settings):
+    from django.core.management import call_command
+    from django.core.management.base import CommandError
+
+    settings.AI_ENABLED = False
+    output = io.StringIO()
+    with patch("assistant.management.commands.check_assistant.chat") as send:
+        with pytest.raises(CommandError, match="AI_ENABLED=false"):
+            call_command("check_assistant", live=True, stdout=output)
+    send.assert_not_called()
+    settings.AI_ENABLED = True
+    settings.LLM_API_KEY = "do-not-print-this-key"
+    tool = {
+        "_backend": "local",
+        "_model": "local-test-model",
+        "tool_calls": [
+            {
+                "id": "read_1",
+                "type": "function",
+                "function": {"name": "read_demo_fact", "arguments": "{}"},
+            }
+        ],
+    }
+    final = {
+        "_backend": "local",
+        "_model": "local-test-model",
+        "content": json.dumps(
+            {
+                "answer_key": "facts",
+                "source_ids": ["fact_1"],
+                "questions": [],
+            }
+        ),
+    }
+    with patch("assistant.management.commands.check_assistant.chat", side_effect=[tool, final]):
+        call_command("check_assistant", live=True, stdout=output)
+    assert '"actual_backend": "local"' in output.getvalue()
+    assert "do-not-print-this-key" not in output.getvalue()

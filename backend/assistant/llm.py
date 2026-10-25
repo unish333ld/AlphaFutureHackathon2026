@@ -61,6 +61,12 @@ def _endpoint(base_url):
 def _request(base_url, api_key, models, messages, tools, timeout, *, openrouter=False):
     if not models or (openrouter and not api_key):
         raise _TransportFailure()
+    if (
+        openrouter
+        and settings.LLM_OPENROUTER_FREE_ONLY
+        and any(not candidate.endswith(":free") for candidate in models)
+    ):
+        raise _TransportFailure()
     body = {
         "model": models[0],
         "messages": messages,
@@ -71,6 +77,9 @@ def _request(base_url, api_key, models, messages, tools, timeout, *, openrouter=
         body.pop("model")
         body["models"] = models
         body["reasoning"] = {"enabled": False}
+        body["provider"] = {"require_parameters": True}
+        if settings.LLM_OPENROUTER_FREE_ONLY:
+            body["provider"]["max_price"] = {"prompt": 0, "completion": 0, "request": 0}
     if tools:
         body.update({"tools": tools, "tool_choice": "auto"})
     else:

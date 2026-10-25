@@ -64,6 +64,21 @@ def test_natural_product_aliases_resolve_to_same_active_catalog_entry(demo, alia
         ("Нужно 1 500 000 рублей на 18 месяцев", {"amount": "1500000.00", "term_months": 18}),
         ("Нужно 1,5 млн на два года", {"amount": "1500000.00", "term_months": 24}),
         ("Два миллиона на год", {"amount": "2000000.00", "term_months": 12}),
+        (
+            "Рассчитай предварительный платёж: Оборотные, миллион рублей на 12 месяцев",
+            {"amount": "1000000.00", "term_months": 12},
+        ),
+        (
+            "Какой будет ежемесячный платёж на миллион рублей на год?",
+            {"amount": "1000000.00", "term_months": 12},
+        ),
+        (
+            "Посчитай платёж для кредита 1,5 млн на 18 месяцев",
+            {"amount": "1500000.00", "term_months": 18},
+        ),
+        ("Рассчитай платёж: выручка миллион рублей", {}),
+        ("Рассчитай платёж: расходы миллион рублей", {}),
+        ("Платежи по обязательствам миллион рублей", {}),
         ("От 1 до 2 млн на год", {"ambiguous": True}),
         ("Миллион долларов на год", {"ambiguous": True}),
         ("1-2 млн на год", {"ambiguous": True}),
@@ -389,3 +404,20 @@ def test_legacy_unverified_fact_envelope_is_not_exposed_as_trusted_history(demo,
     assert "Архивный ответ" in row["content"]
     message.refresh_from_db()
     assert message.content == "Old response"  # No destructive rewriting of persisted history.
+
+
+def test_model_does_not_reask_confirmed_request_parameters(demo, api, settings):
+    settings.AI_ENABLED = True
+    cid = new_conversation(api, demo["client"], demo["applications"]["approval"])
+    result = model_answer("form_fields", (), ("product", "amount", "term_months", "application"))
+    with patch("assistant.services.chat", return_value=result) as provider:
+        response = send(api, demo, cid, "Оборотные: нужен миллион рублей на 12 месяцев")
+    assert response.status_code == 200
+    assert response.data["message"]["questions"] == []
+    messages = provider.call_args.args[0]
+    assert [m["role"] for m in messages].count("system") == 1
+    context = json.loads(messages[0]["content"].split("\nSERVER_CONTEXT:\n")[1])
+    assert context["confirmed_product_code"] == "working-capital"
+    assert context["request_evidence"]["amount"] == "1000000.00"
+    assert context["request_evidence"]["term_months"] == 12
+    assert context["application_selected"] is True

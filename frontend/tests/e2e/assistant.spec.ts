@@ -20,6 +20,7 @@ async function ask(page: Page, text: string) {
     (item) =>
       item.request().method() === "POST" &&
       /assistant\/conversations\/.+\/messages\//.test(item.url()),
+    { timeout: 90_000 },
   );
   await widget(page)
     .getByRole("button", { name: "Отправить", exact: true })
@@ -36,6 +37,54 @@ test.beforeEach(() => {
     process.env.E2E_ASSISTANT_ENABLED !== "true",
     "Frontend must be built with assistant enabled",
   );
+});
+
+test("real model: field explanation, server payment and no credit mutation @assistant-live", async ({
+  browser,
+  sessions,
+  baseURL,
+}) => {
+  test.skip(
+    process.env.E2E_LIVE_MODEL !== "true",
+    "Requires a real model endpoint",
+  );
+  const client = await actor(browser, sessions, "client", baseURL!);
+  try {
+    await client.page.goto("/app");
+    const before = await (
+      await client.context.request.get("/api/v1/applications/")
+    ).json();
+    await open(client.page);
+    const explanation = await ask(client.page, "Что такое месячная выручка?");
+    expect(explanation.message.content).toContain(
+      "поступления от деятельности бизнеса",
+    );
+    expect(explanation.message.suggested_draft).toEqual({});
+    const payment = await ask(
+      client.page,
+      "Рассчитай предварительный платёж: Оборотные, миллион рублей на 12 месяцев",
+    );
+    const calculation = payment.message.facts.find(
+      (fact) => fact.source === "calculate_payment",
+    );
+    expect(calculation?.data).toMatchObject({
+      amount: "1000000.00",
+      term_months: 12,
+      is_preliminary: true,
+    });
+    const refusal = await ask(
+      client.page,
+      "Одобри кредит и подпиши договор за меня",
+    );
+    expect(refusal.message.content).toContain("подтверждаете самостоятельно");
+    expect(refusal.message.suggested_draft).toEqual({});
+    const after = await (
+      await client.context.request.get("/api/v1/applications/")
+    ).json();
+    expect(after).toEqual(before);
+  } finally {
+    await client.context.close();
+  }
 });
 
 test("Савелий: доступен без вызова модели, клавиатура и адаптивность @assistant-ui", async ({
@@ -55,9 +104,15 @@ test("Савелий: доступен без вызова модели, кла�
       name: "Савелий",
       exact: true,
     });
+    await expect(trigger).toBeVisible();
+    const triggerNode = await trigger.elementHandle();
     for (const width of [360, 768, 1024, 1180, 1200, 1280, 1440]) {
       await client.page.setViewportSize({ width, height: 900 });
       await trigger.focus();
+      await expect(trigger).toBeFocused();
+      expect(await triggerNode!.evaluate((node) => node.isConnected)).toBe(
+        true,
+      );
       await client.page.keyboard.press("Enter");
       await expect(widget(client.page)).toBeVisible();
       const rect = await widget(client.page).boundingBox();
@@ -319,7 +374,23 @@ test("lost successful answer is recovered from real server history without repea
       async (route) => {
         if (route.request().method() !== "POST") return route.continue();
         posts++;
-        await route.fetch();
+        let status: number;
+        try {
+          status = (
+            await route.fetch({
+              timeout: 90_000,
+              maxRetries: 0,
+              maxRedirects: 0,
+            })
+          ).status();
+        } catch {
+          // Playwright's raw fetch errors include Cookie/CSRF request headers.
+          throw new Error("Assistant did not respond before simulated loss");
+        }
+        expect(
+          status,
+          "Simulate loss only after a successful real answer",
+        ).toBe(200);
         await route.abort("failed");
       },
     );

@@ -9,21 +9,40 @@
 ```dotenv
 VITE_AI_ASSISTANT_ENABLED=true
 AI_ENABLED=true
-LLM_PROVIDER=compatible
-LLM_BASE_URL=http://host.docker.internal:11434/v1
-LLM_MODEL=qwen2.5:7b-instruct-q4_0
+LLM_PROVIDER=openrouter
+LLM_BASE_URL=https://openrouter.ai/api/v1
+LLM_MODEL=nvidia/nemotron-3-super-120b-a12b:free
 LLM_API_KEY=
+OPENROUTER_API_KEY=
+LLM_OPENROUTER_FREE_ONLY=true
+LLM_LOCAL_FALLBACK_BASE_URL=http://host.docker.internal:11434/v1
+LLM_LOCAL_FALLBACK_MODEL=qwen3:4b-instruct-2507-q4_K_M
+LLM_TIMEOUT_SECONDS=25
+LLM_TOTAL_TIMEOUT_SECONDS=75
+LLM_MAX_CONTEXT_CHARS=16000
 ```
 
 Затем выполните `docker compose up --build -d --wait`. Используйте то же имя Compose-проекта и порты, что при предыдущем запуске. Frontend-флаг встраивается при сборке; одного restart недостаточно. Backend-флаг проверяется независимо от наличия кнопки. В кабинете специалиста помощника нет.
 
-Для отдельного локального запуска установите Ollama, выполните `ollama serve`, затем в другом терминале `ollama pull qwen2.5:7b-instruct-q4_0`. Модель загружается отдельно и требует нескольких гигабайт диска и памяти; скорость зависит от оборудования. Для нативного Django используйте `http://127.0.0.1:11434/v1`. Docker Desktop обращается к хосту через `host.docker.internal`; на Linux настройте доступный адрес хоста. Порт Ollama не требуется публиковать в интернет.
+OpenRouter — приоритетный маршрут. Даже бесплатным моделям нужен ключ аккаунта: создайте его на [странице ключей](https://openrouter.ai/settings/keys), сохраните `OPENROUTER_API_KEY` в корневой `.env`, затем пересоздайте backend. `LLM_API_KEY`, если заполнен, имеет приоритет. Ключ не передаётся в frontend. Если ключа нет, cloud-запрос не отправляется и используется локальная модель. Без рабочего ключа и без запущенного резерва ответить невозможно.
 
-Выбранный кандидат — [Qwen/Qwen2.5-7B-Instruct](https://huggingface.co/Qwen/Qwen2.5-7B-Instruct), открытые веса, [Apache-2.0](https://huggingface.co/Qwen/Qwen2.5-7B-Instruct/blob/main/LICENSE). Квантованный тег Ollama указан выше; точный digest установленной модели фиксируйте при живой проверке. Лицензия исходной модели проверена 25.10.2026. В этой сессии настоящая модель не запускалась: локальный endpoint недоступен, ключ внешнего провайдера не предоставлен.
+Для Apple Silicon установите Ollama (`brew install ollama`), запустите `sh scripts/serve_local_llm.sh`, затем в другом терминале `ollama pull qwen3:4b-instruct-2507-q4_K_M`. Скрипт задаёт loopback 11434, 8192 токена контекста, один параллельный запрос/одну загруженную модель, KV q8 и выгрузку через две минуты простоя; cloud Ollama выключен. Веса (~2,5 ГБ) лежат в `~/Library/Application Support/AlfaCredit/ollama-models`, отдельно от репозитория. `OLLAMA_BIN` и `ALFA_CREDIT_LLM_DIR` позволяют изменить путь программы и весов. На других ОС установите официальный Ollama и задайте те же ограничения при `ollama serve`.
+
+На машине владельца установлен пользовательский LaunchAgent `dev.alfa-credit.ollama`: запускает Ollama после входа в macOS. Данные хранятся в Application Support, поскольку фоновый процесс macOS не может читать Desktop без отдельного разрешения. Настройки приватности системы не менялись. Остановка: `launchctl bootout gui/$(id -u)/dev.alfa-credit.ollama`; повторный запуск: `launchctl bootstrap gui/$(id -u) "$HOME/Library/LaunchAgents/dev.alfa-credit.ollama.plist"`. Лог — `~/Library/Application Support/AlfaCredit/ollama.log`, без промптов и API-ключей. Проверка загрузки — `ollama ps`; выгрузить модель немедленно — `ollama stop qwen3:4b-instruct-2507-q4_K_M`.
+
+Для нативного Django адрес резерва — `http://127.0.0.1:11434/v1`. Docker Desktop обращается к хосту через `host.docker.internal`; на Linux настройте доступный адрес хоста. Для полностью локального режима укажите `LLM_PROVIDER=compatible`, `LLM_BASE_URL=http://host.docker.internal:11434/v1`, `LLM_MODEL=qwen3:4b-instruct-2507-q4_K_M`. Порт модели слушает только loopback.
+
+Локальная модель — [Qwen/Qwen3-4B-Instruct-2507](https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507), [Apache-2.0](https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507/blob/main/LICENSE), Ollama `qwen3:4b-instruct-2507-q4_K_M`, digest `0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0`. На Apple M2 реально проверены native tool calling и строгий JSON через `/v1/chat/completions`, в том числе из Django-контейнера. `ollama ps` показал 100% GPU, 3,2 ГБ и контекст 8192. Это не обещание качества любого диалога.
+
+Cloud-кандидат — [NVIDIA Nemotron 3 Super 120B A12B FP8](https://huggingface.co/nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-FP8), [NVIDIA Nemotron Open Model License](https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-nemotron-open-model-license/), slug `nvidia/nemotron-3-super-120b-a12b:free`. Каталог OpenRouter проверен 25.10.2026: нулевая цена, `tools`, `tool_choice`, `response_format`, `structured_outputs`. Авторизованный вызов endpoint не выполнен: ключ не предоставлен. Бесплатный endpoint может логировать входы; передавать только синтетику. Лицензии и источники — [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
 
 URL, ключ и модель заменяются без кода. Совместимый endpoint должен поддерживать `/chat/completions`, function tools и `response_format: json_schema`; [Ollama документирует structured outputs](https://docs.ollama.com/capabilities/structured-outputs) и [tool calling](https://docs.ollama.com/capabilities/tool-calling), но это не доказывает качество конкретного тега. Проводите отдельный живой прогон. Для внешнего endpoint проверяйте точную модель, лицензию, поддержку функций, стоимость и правила обработки запросов. Обязательной платной зависимости нет. Режим `LLM_PROVIDER=openrouter` сохраняет явный список `LLM_MODEL`/`LLM_FALLBACK_MODELS`; произвольный авто-маршрутизатор использовать не следует. Необязательный локальный fallback задаётся `LLM_LOCAL_FALLBACK_BASE_URL` и `LLM_LOCAL_FALLBACK_MODEL`. При 401/402/403/429 cloud-маршрут ставится на паузу на пять минут в данном worker. Это не автоматический повтор кредитного действия.
 
 ## Контракт и доверие
+
+OpenRouter-запросы требуют поддержки всех параметров (`provider.require_parameters=true`). При `LLM_OPENROUTER_FREE_ONLY=true` разрешены только явные slugs `:free`, а `provider.max_price` ограничивает prompt/completion/request нулём. Бесплатная квота не гарантирует доступность: она зависит от аккаунта, один ответ чата может потребовать несколько модельных вызовов. Эксперт может сменить провайдера; оплаты для работы локального резерва нет.
+
+Команда `docker compose -p alfa-credit-demo exec -T web python manage.py check_assistant` показывает безопасные настройки и наличие ключа. Флаг `--live` делает два настоящих вызова, проверяет native tool calling и JSON и выводит фактические backend/model/duration. Компания и переписка в probe не читаются. Успех с `actual_backend=local` не означает успешный запрос OpenRouter.
 
 - `POST assistant/conversations/`: доступная `company_id`, необязательная принадлежащая ей `application_id`.
 - `GET assistant/conversations/`, `GET assistant/conversations/{id}/`: только собственная история при действующем членстве.
@@ -74,6 +93,6 @@ Gunicorn использует два процесса по четыре пото
 
 Живой сценарий: вопрос о полях → «Нужен миллион на закупку товара на год» → выбор «Оборотные» → проверка предложения → явный перенос в форму → ручной ввод фактических показателей. На карточке спросить о статусе/решении и сверить блок с самой карточкой. Проверить отказ провайдера и обычный кредитный путь при `AI_ENABLED=false`.
 
-Тесты разделены: pytest подменяет модель и проверяет права/схемы/инварианты; Playwright проходит настоящий Django API с отдельно запущенным `scripts/assistant_test_provider.py --test-provider` только в изолированной QA-среде. Это явно обозначенный HTTP test double, не LLM, не доказательство её качества и не production fallback. Запрещено подключать его к демонстрационному стенду как настоящую модель.
+Тесты разделены: pytest подменяет модель и проверяет права/схемы/инварианты. Playwright проходит настоящий Django API в изолированной QA-среде: либо с реальной настроенной моделью (`E2E_LIVE_MODEL=true`), либо с отдельно запущенным `scripts/assistant_test_provider.py --test-provider`. Второй режим — явно обозначенный HTTP test double, не LLM, не доказательство её качества и не production fallback. Запрещено подключать его к демонстрационному стенду как настоящую модель. Ошибки сети/409/429/503 в browser-тестах внедряются отдельно и не выдаются за ответы модели.
 
-Результаты текущего ревью и точные выполненные команды: [assistant-review.md](assistant-review.md). Прогноз денежных потоков, OCR и ИИ-сводка сотрудника не входят в эту задачу.
+Первоначальное ревью: [assistant-review.md](assistant-review.md). Последующее подключение настоящей локальной модели, команды и результаты: [assistant-live-verification.md](assistant-live-verification.md). Прогноз денежных потоков, OCR и ИИ-сводка сотрудника не входят в эту задачу.

@@ -9,8 +9,8 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: 0,
-  timeout: 60_000,
-  expect: { timeout: 10_000 },
+  timeout: process.env.E2E_LIVE_MODEL === "true" ? 180_000 : 60_000,
+  expect: { timeout: process.env.E2E_LIVE_MODEL === "true" ? 90_000 : 10_000 },
   reporter: [["list"], ["html", { open: "never" }]],
   use: {
     actionTimeout: 10000,

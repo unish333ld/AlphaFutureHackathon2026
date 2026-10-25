@@ -35,9 +35,17 @@ def request_evidence(texts):
             # A later unambiguous message can resolve the ambiguity.
             result = {"ambiguous": True}
             continue
+        # A request to calculate a payment is not a statement of existing debt.
+        # Strip only the explicit request phrase, never financial field values.
+        requested_amount = re.sub(
+            r"\b(?:рассчитай|посчитай|рассчитать|посчитать|какой\s+(?:будет\s+)?)\s*"
+            r"(?:(?:предварительн|ежемесячн|месячн)\w*\s+)?платеж\b",
+            "",
+            text,
+        )
         amount_text = " ".join(
             part
-            for part in re.split(r"[!?;]|\.(?!\d)", text)
+            for part in re.split(r"[!?;]|\.(?!\d)", requested_amount)
             if not re.search(r"выруч|расход|доход|долг|обязательств|плат[её]ж", part)
         )
         if amount_text:

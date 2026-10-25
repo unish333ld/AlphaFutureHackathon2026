@@ -29,15 +29,35 @@ SYSTEM_PROMPT = (
     "Используй list_credit_products для каталога, get_application_status для статуса, "
     "решения, предложения и следующего шага. Для черновика и расчёта нужны явно "
     "подтверждённые пользователем продукт, сумма в рублях и срок в месяцах. "
+    "Смотри confirmed_product_code и request_evidence в SERVER_CONTEXT. "
+    "Если сумма/срок известны, не спрашивай их повторно. Если продукт ещё не выбран, "
+    "получи каталог list_credit_products и задай только вопрос product. "
+    "После выбора продукта, когда сумма/срок известны, предложи поля через "
+    "suggest_application_draft; скопируй значения из request_evidence. "
+    "Для выбора продукта и просьбы подготовить заявку при draft_ready=true обязательно "
+    "вызови suggest_application_draft. Если цель не названа, используй нейтральную "
+    "цель 'Пополнение оборотных средств' для working-capital, 'Приобретение оборудования' "
+    "для equipment: клиент проверит её в форме. Не блокируй предложение вопросом о цели. "
+    "Для предварительного платежа используй calculate_payment вместо черновика. "
+    "get_application_status вызывай только при application_selected=true и вопросе о заявке. "
+    "Вопрос о значении поля формы объясняй ключом amount/term/purpose/revenue/expenses/debt "
+    "без инструментов. Если request_evidence.ambiguous=true, уточни ambiguity. "
     "Финансовые показатели не заполняй. Если ответ неоднозначен — уточни его. "
     "Максимум два вызова инструментов за ответ. Вместо свободного текста верни JSON "
     "следующей схемы. answer_key выбирает объяснение из серверного словаря; "
     "source_ids содержат только fact_1, fact_2 из текущих результатов инструментов. "
     "Для ответа о данных заявки обязательно получи свежие данные инструментом. "
-    "Для отсутствующих параметров выбери вопросы из questions. "
+    "Для отсутствующих параметров выбери вопросы из questions. После инструмента "
+    "answer_key=facts, source_ids=[fact_1], questions=[]; вопросы о пропущенных "
+    "полях сервер дополнит сам. Пример: 'Что такое выручка?' -> "
+    '{"answer_key":"revenue","source_ids":[],"questions":[]}. '
+    "Пример: 'Нужен миллион на год' при пустом продукте -> list_credit_products. "
+    "Ответ 'Оборотные' при известных сумме/сроке -> suggest_application_draft. "
     + json.dumps(ANSWER_SCHEMA, ensure_ascii=False)
-    + " Смысл answer_key: "
-    + json.dumps(ANSWERS, ensure_ascii=False)
+    + " Ключи: form_fields=поля формы, amount=сумма, term=срок, purpose=цель, "
+    "revenue=выручка, expenses=расходы, debt=платежи по обязательствам, "
+    "no_action=помощник не совершает кредитные действия, no_forecast=прогноз вне релиза, "
+    "clarify=уточнение, facts=показать полученные серверные данные."
 )
 MAX_TOOL_CALLS = 2
 MAX_CONTEXT_MESSAGES = 8
@@ -95,23 +115,31 @@ def _model_messages(conversation, text):
     selected = resolve_product(text)
     if selected:
         conversation.selected_product = selected
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-    messages.extend(
-        {"role": message.role, "content": message.content[:1200]} for message in reversed(history)
-    )
-    messages.append(
+    context = {
+        "confirmed_product_code": conversation.selected_product.code
+        if conversation.selected_product_id
+        else None,
+        "request_evidence": evidence,
+        "application_selected": bool(conversation.application_id),
+        "draft_ready": bool(
+            conversation.selected_product_id
+            and evidence.get("amount")
+            and evidence.get("term_months")
+            and not evidence.get("ambiguous")
+        ),
+    }
+    # Some compatible chat templates only preserve the first system message.
+    # Keep policy and scoped data together instead of a late second system role.
+    messages = [
         {
             "role": "system",
-            "content": json.dumps(
-                {
-                    "confirmed_product_code": conversation.selected_product.code
-                    if conversation.selected_product_id
-                    else None,
-                    "request_evidence": evidence,
-                },
-                ensure_ascii=False,
-            ),
+            "content": SYSTEM_PROMPT
+            + "\nSERVER_CONTEXT:\n"
+            + json.dumps(context, ensure_ascii=False),
         }
+    ]
+    messages.extend(
+        {"role": message.role, "content": message.content[:1200]} for message in reversed(history)
     )
     messages.append({"role": "user", "content": text})
     return messages, evidence
@@ -242,6 +270,12 @@ def _answer(user, conversation, text):
                 backend=first.get("_backend"),
                 model=first.get("_model"),
             )
+    known = set(evidence) - {"ambiguous"} if not evidence.get("ambiguous") else set()
+    if conversation.selected_product_id:
+        known.add("product")
+    if conversation.application_id:
+        known.add("application")
+    answer["questions"] = [code for code in answer["questions"] if code not in known]
     content, questions, reply_type = _render(answer, facts, suggested_draft)
     return content, facts, suggested_draft, questions, reply_type, "available"
 

@@ -29,10 +29,13 @@ def respond(body):
     ).lower()
     context = next(
         (
-            json.loads(message["content"])
+            json.loads(message["content"].split("\nSERVER_CONTEXT:\n")[-1])
             for message in messages
             if message["role"] == "system"
-            and message["content"].startswith('{"confirmed_product_code"')
+            and (
+                message["content"].startswith('{"confirmed_product_code"')
+                or "\nSERVER_CONTEXT:\n" in message["content"]
+            )
         ),
         {},
     )
