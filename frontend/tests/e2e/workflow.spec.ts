@@ -484,7 +484,7 @@ test("pending issuance survives reload and explicit retry uses the same key", as
   }
 });
 
-test("responsive layouts, keyboard dialogs, accessibility, empty states and AI placeholder", async ({
+test("responsive layouts, keyboard dialogs, accessibility, empty states and AI assistant", async ({
   browser,
   sessions,
   baseURL,
@@ -527,19 +527,21 @@ test("responsive layouts, keyboard dialogs, accessibility, empty states and AI p
     }
     await client.page.goto("/app");
     await expect(
-      client.page.getByRole("button", { name: "Помощник · демо", exact: true }),
+      client.page.getByRole("button", { name: "Савелий", exact: true }),
     ).toBeVisible();
     await client.page
-      .getByRole("button", { name: "Помощник · демо", exact: true })
+      .getByRole("button", { name: "Савелий", exact: true })
       .click();
-    await expect(client.page.getByRole("dialog")).toBeVisible();
+    await expect(
+      client.page.getByRole("dialog", { name: "Савелий, помощник по кредиту" }),
+    ).toBeVisible();
     await client.page.keyboard.press("Escape");
     await expect(client.page.getByRole("dialog")).toHaveCount(0);
     await expect(
-      client.page.getByRole("button", { name: "Помощник · демо", exact: true }),
+      client.page.getByRole("button", { name: "Савелий", exact: true }),
     ).toBeFocused();
     await expect(
-      staff.page.getByRole("button", { name: "Помощник · демо", exact: true }),
+      staff.page.getByRole("button", { name: "Савелий", exact: true }),
     ).toHaveCount(0);
     await outsider.page.goto("/app/loans");
     await expect(

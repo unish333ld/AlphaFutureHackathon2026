@@ -25,6 +25,7 @@ export async function request<T>(
     body?: unknown;
     signal?: AbortSignal;
     idempotencyKey?: string;
+    timeoutMs?: number;
   } = {},
 ): Promise<T> {
   if (!/^[a-z0-9/\-?=&_%+]+$/i.test(path)) throw new Error("Invalid API path");
@@ -48,8 +49,11 @@ export async function request<T>(
       body:
         options.body === undefined ? undefined : JSON.stringify(options.body),
       signal: options.signal
-        ? AbortSignal.any([options.signal, AbortSignal.timeout(20000)])
-        : AbortSignal.timeout(20000),
+        ? AbortSignal.any([
+            options.signal,
+            AbortSignal.timeout(options.timeoutMs ?? 20000),
+          ])
+        : AbortSignal.timeout(options.timeoutMs ?? 20000),
     });
   } catch (error) {
     if (options.signal?.aborted) throw error;

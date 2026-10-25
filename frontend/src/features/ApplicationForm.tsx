@@ -43,6 +43,7 @@ import {
 } from "../shared/ui/kit";
 import { LinkButton, useUnsavedGuard } from "../shared/ui/navigation";
 import { PageTitle } from "../shared/ui/PageTitle";
+import { useAssistantForm } from "./AssistantFormContext";
 import s from "../app/layout.module.css";
 import f from "./form.module.css";
 
@@ -220,6 +221,10 @@ function ApplicationForm({
 }) {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const assistantBridge = useAssistantForm();
+  const assistantDraft = useRef(
+    mode === "new" ? assistantBridge.transfer.current : null,
+  ).current;
   const [params] = useSearchParams();
   const refresh = useRefreshCredit();
   const { companies, products } = useCatalogs();
@@ -242,17 +247,76 @@ function ApplicationForm({
       initial && revision
         ? fromRevision(initial, revision)
         : {
-            company: params.get("company") ?? "",
-            product: params.get("product") ?? "",
-            amount: "1000000.00",
-            term_months: "24",
-            purpose: "",
+            company: assistantDraft?.company ?? params.get("company") ?? "",
+            product: assistantDraft?.product ?? params.get("product") ?? "",
+            amount: assistantDraft?.amount ?? "1000000.00",
+            term_months: String(assistantDraft?.term_months ?? 24),
+            purpose: assistantDraft?.purpose ?? "",
             monthly_revenue: "",
             monthly_expenses: "",
             monthly_debt_payments: "",
           },
   });
   const values = form.watch();
+  useEffect(() => {
+    assistantBridge.setSelection((previous) =>
+      previous?.company === values.company &&
+      previous.product === values.product
+        ? previous
+        : { company: values.company, product: values.product },
+    );
+  }, [assistantBridge.setSelection, values.company, values.product]);
+  useEffect(
+    () => () => assistantBridge.setSelection(null),
+    [assistantBridge.setSelection],
+  );
+  useEffect(() => {
+    assistantBridge.transfer.current = null;
+    const snapshot = () => ({
+      ...form.getValues(),
+      fingerprint: JSON.stringify([
+        form.getValues(),
+        base?.id,
+        base?.lock_version,
+        mode,
+      ]),
+    });
+    const adapter = {
+      snapshot,
+      apply: (
+        draft: import("./assistantDraft").AssistantDraft,
+        expected: string,
+      ) => {
+        const current = snapshot();
+        if (
+          expected !== current.fingerprint ||
+          draft.company !== current.company ||
+          draft.product !== current.product
+        )
+          return false;
+        form.setValue("amount", draft.amount, {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+        form.setValue("term_months", String(draft.term_months), {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+        form.setValue("purpose", draft.purpose, {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+        setStep("parameters");
+        setConfirmed(false);
+        return true;
+      },
+    };
+    assistantBridge.form.current = adapter;
+    return () => {
+      if (assistantBridge.form.current === adapter)
+        assistantBridge.form.current = null;
+    };
+  }, [assistantBridge, form, base?.id, base?.lock_version, mode]);
   const product = products.data?.find((item) => item.id === values.product);
   const company = companies.data?.find((item) => item.id === values.company);
   const calculate = useMutation({ mutationFn: api.calculator, retry: false });
@@ -264,9 +328,11 @@ function ApplicationForm({
     initialized.current = true;
     if (!initial) {
       const selected =
+        products.data.find((p) => p.id === assistantDraft?.product) ??
         products.data.find((p) => p.id === params.get("product")) ??
         products.data[0];
       const selectedCompany =
+        companies.data.find((c) => c.id === assistantDraft?.company) ??
         companies.data.find((c) => c.id === params.get("company")) ??
         companies.data[0];
       const current = form.getValues();
@@ -275,12 +341,14 @@ function ApplicationForm({
         company: selectedCompany?.id ?? "",
         product: selected?.id ?? "",
         purpose:
-          selected?.code === "equipment"
-            ? "Приобретение оборудования"
-            : "Пополнение оборотных средств",
+          assistantDraft && selected?.id === assistantDraft.product
+            ? assistantDraft.purpose
+            : selected?.code === "equipment"
+              ? "Приобретение оборудования"
+              : "Пополнение оборотных средств",
       });
     }
-  }, [companies.data, products.data, initial, form, params]);
+  }, [companies.data, products.data, initial, form, params, assistantDraft]);
   const guard = useUnsavedGuard(form.formState.isDirty);
   const field = (name: FieldPath<FormValues>, label: string, hint?: string) => (
     <Controller

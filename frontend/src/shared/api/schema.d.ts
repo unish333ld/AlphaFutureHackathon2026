@@ -205,6 +205,63 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/assistant/conversations/": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Мои диалоги */
+    get: operations["v1_assistant_conversations_list"];
+    put?: never;
+    /** Начать диалог для своей компании */
+    post: operations["v1_assistant_conversations_create"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/assistant/conversations/{conversation_id}/messages/": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Сообщения моего диалога */
+    get: operations["v1_assistant_conversations_messages_retrieve"];
+    put?: never;
+    /**
+     * Спросить Савелия
+     * @description Требует session cookie, CSRF и актуальную версию диалога. Помощник не меняет заявку и не принимает кредитное решение. reply_type определяет ответ/уточнение/предложение полей; facts — только серверные источники текущего ответа. model_status=degraded означает, что после чтения фактов модель не завершила объяснение. В таком случае показаны только факты. 409 требует сверки истории и карточки без автоматического повтора; 429 — соблюдения Retry-After. application_version фиксирует версию заявки на момент ответа. Перед переносом suggested_draft проверить неизменность формы и показать подтверждение. История ограничена AI_HISTORY_DAYS.
+     */
+    post: operations["v1_assistant_conversations_messages_create"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/assistant/conversations/{id}/": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Мой диалог */
+    get: operations["v1_assistant_conversations_retrieve"];
+    put?: never;
+    post?: never;
+    /** Удалить мой диалог и все сообщения */
+    delete: operations["v1_assistant_conversations_destroy"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/calculator/payment/": {
     parameters: {
       query?: never;
@@ -843,6 +900,13 @@ export interface components {
       readonly created_at: string;
       readonly decision: components["schemas"]["CreditDecision"] | null;
     };
+    AssistantReply: {
+      /** Format: uuid */
+      conversation_id: string;
+      version: number;
+      model_status: components["schemas"]["ModelStatusEnum"];
+      message: components["schemas"]["Message"];
+    };
     AvailableAction: {
       action: components["schemas"]["ActionEnum"];
       allowed: boolean;
@@ -946,6 +1010,30 @@ export interface components {
      * @enum {string}
      */
     CompanyStatusEnum: "active" | "inactive";
+    Conversation: {
+      /** Format: uuid */
+      readonly id: string;
+      /** Format: uuid */
+      readonly company: string;
+      /** Format: uuid */
+      readonly application: string | null;
+      readonly application_number: string | null;
+      readonly version: number;
+      /**
+       * Создано
+       * Format: date-time
+       */
+      readonly created_at: string;
+      /** Format: date-time */
+      readonly updated_at: string;
+    };
+    /** @description Reject extra fields instead of silently dropping status/rate/role injection. */
+    CreateConversationRequest: {
+      /** Format: uuid */
+      company_id: string;
+      /** Format: uuid */
+      application_id?: string | null;
+    };
     CreditDecision: {
       /** Format: uuid */
       readonly id: string;
@@ -1089,7 +1177,7 @@ export interface components {
       /** Format: uuid */
       readonly company: string;
       /** Роль в компании */
-      readonly role: components["schemas"]["RoleEnum"];
+      readonly role: components["schemas"]["MemberRoleEnum"];
       /** Может отправлять заявки */
       readonly can_submit: boolean;
       /** Может условно подписывать договор */
@@ -1097,6 +1185,277 @@ export interface components {
       /** Действующее членство */
       readonly active: boolean;
     };
+    /**
+     * @description * `owner` - Собственник
+     *     * `director` - Директор
+     *     * `accountant` - Бухгалтер
+     * @enum {string}
+     */
+    MemberRoleEnum: "owner" | "director" | "accountant";
+    Message: {
+      /** Format: uuid */
+      readonly id: string;
+      readonly role: components["schemas"]["MessageRoleEnum"];
+      readonly content: string;
+      readonly facts: (
+        | {
+            id: string;
+            /** @enum {string} */
+            source: "get_company_profile";
+            data: {
+              /** Format: uuid */
+              company_id: string;
+              name: string;
+              kind: string;
+              /** Format: date */
+              registered_at: string;
+              status: string;
+              monthly_financial_history_available: boolean;
+            };
+          }
+        | {
+            id: string;
+            /** @enum {string} */
+            source: "list_credit_products";
+            data: {
+              products: {
+                /** Format: uuid */
+                id: string;
+                code: string;
+                name: string;
+                description: string;
+                /** @example 1000000.00 */
+                min_amount: string;
+                /** @example 1000000.00 */
+                max_amount: string;
+                min_term_months: number;
+                max_term_months: number;
+                /** @example 18.0000 */
+                demo_annual_rate: string;
+              }[];
+            };
+          }
+        | {
+            id: string;
+            /** @enum {string} */
+            source: "get_application_status";
+            data:
+              | {
+                  /** Format: uuid */
+                  application_id: string;
+                  number: string;
+                  /** @enum {string} */
+                  status:
+                    | "draft"
+                    | "submitted"
+                    | "checking"
+                    | "review"
+                    | "needs_info"
+                    | "offered"
+                    | "accepted"
+                    | "signed"
+                    | "issued"
+                    | "rejected"
+                    | "declined"
+                    | "expired";
+                  lock_version: number;
+                  product: string;
+                  available_actions: {
+                    /** @enum {string} */
+                    action:
+                      | "update_draft"
+                      | "submit"
+                      | "retry_checks"
+                      | "provide_information"
+                      | "revise"
+                      | "claim"
+                      | "release"
+                      | "request_information"
+                      | "decide"
+                      | "accept_offer"
+                      | "decline_offer"
+                      | "sign_agreement"
+                      | "disburse";
+                    allowed: boolean;
+                    /** @enum {string|null} */
+                    reason_code:
+                      | "role_required"
+                      | "capability_required"
+                      | "assignment_required"
+                      | "assigned_to_other"
+                      | "already_assigned"
+                      | "not_assigned"
+                      | "invalid_state"
+                      | "needs_information"
+                      | "technical_error"
+                      | "retry_limit"
+                      | "waiting_for_client"
+                      | "offer_expired"
+                      | "assessment_unavailable"
+                      | "assessment_outdated"
+                      | "checks_incomplete"
+                      | "already_completed"
+                      | "no_current_revision"
+                      | "terms_mismatch"
+                      | "product_unavailable"
+                      | "invalid_terms"
+                      | null;
+                    /** Format: uuid */
+                    target_id: string | null;
+                  }[];
+                  request?: {
+                    /** @example 1000000.00 */
+                    amount: string;
+                    term_months: number;
+                    purpose: string;
+                    revision_no: number;
+                  };
+                  missing_information?: string[];
+                  decision?: {
+                    /** @enum {string} */
+                    outcome: "approved" | "counteroffer" | "rejected";
+                    reason_code: string;
+                    explanation: string;
+                  };
+                  offer?: {
+                    status: string;
+                    /** @example 1000000.00 */
+                    amount: string;
+                    /** @example 18.0000 */
+                    annual_rate: string;
+                    term_months: number;
+                    /** @example 1000000.00 */
+                    monthly_payment: string;
+                    /** Format: date-time */
+                    expires_at: string;
+                    /** Format: date-time */
+                    sign_before: string | null;
+                  };
+                  signed?: boolean;
+                  issued?: boolean;
+                }
+              | {
+                  /** @enum {string} */
+                  state: "no_application_selected";
+                };
+          }
+        | {
+            id: string;
+            /** @enum {string} */
+            source: "calculate_payment";
+            data:
+              | {
+                  product_code: string;
+                  /** @example 1000000.00 */
+                  amount: string;
+                  term_months: number;
+                  /** @example 18.0000 */
+                  demo_annual_rate: string;
+                  /** @example 1000000.00 */
+                  monthly_payment: string;
+                  /** @example 1000000.00 */
+                  total_overpayment: string;
+                  /** @enum {boolean} */
+                  is_preliminary: true;
+                }
+              | {
+                  /** @enum {string} */
+                  error: "unknown_product_code";
+                  message: string;
+                  available_products: {
+                    code: string;
+                    name: string;
+                  }[];
+                }
+              | {
+                  /** @enum {string} */
+                  state: "missing_information";
+                  required_fields: (
+                    "ambiguity" | "product" | "amount" | "term_months"
+                  )[];
+                };
+          }
+        | {
+            id: string;
+            /** @enum {string} */
+            source: "suggest_application_draft";
+            data:
+              | {
+                  /** Format: uuid */
+                  company: string;
+                  /** Format: uuid */
+                  product: string;
+                  /** @example 1000000.00 */
+                  amount: string;
+                  term_months: number;
+                  purpose: string;
+                  /** @enum {boolean} */
+                  requires_user_confirmation: true;
+                }
+              | {
+                  /** @enum {string} */
+                  error: "unknown_product_code";
+                  message: string;
+                  available_products: {
+                    code: string;
+                    name: string;
+                  }[];
+                }
+              | {
+                  /** @enum {string} */
+                  state: "missing_information";
+                  required_fields: (
+                    "ambiguity" | "product" | "amount" | "term_months"
+                  )[];
+                };
+          }
+      )[];
+      readonly suggested_draft:
+        | Record<string, never>
+        | {
+            /** Format: uuid */
+            company: string;
+            /** Format: uuid */
+            product: string;
+            /** @example 1000000.00 */
+            amount: string;
+            term_months: number;
+            purpose: string;
+            /** @enum {boolean} */
+            requires_user_confirmation: true;
+          };
+      readonly reply_type: components["schemas"]["ReplyTypeEnum"];
+      readonly questions: string[];
+      /** Format: uuid */
+      readonly application_id: string | null;
+      readonly application_version: number | null;
+      readonly model_status: components["schemas"]["ModelStatusEnum"];
+      /**
+       * Создано
+       * Format: date-time
+       */
+      readonly created_at: string;
+    };
+    MessagePage: {
+      count: number;
+      /** Format: uri */
+      next: string | null;
+      /** Format: uri */
+      previous: string | null;
+      results: components["schemas"]["Message"][];
+    };
+    /**
+     * @description * `user` - Клиент
+     *     * `assistant` - Савелий
+     * @enum {string}
+     */
+    MessageRoleEnum: "user" | "assistant";
+    /**
+     * @description * `available` - available
+     *     * `degraded` - degraded
+     * @enum {string}
+     */
+    ModelStatusEnum: "available" | "degraded";
     /** @enum {unknown} */
     NullEnum: null;
     Offer: {
@@ -1226,6 +1585,21 @@ export interface components {
        */
       previous?: string | null;
       results: components["schemas"]["Company"][];
+    };
+    PaginatedConversationList: {
+      /** @example 123 */
+      count: number;
+      /**
+       * Format: uri
+       * @example http://api.example.org/accounts/?page=4
+       */
+      next?: string | null;
+      /**
+       * Format: uri
+       * @example http://api.example.org/accounts/?page=2
+       */
+      previous?: string | null;
+      results: components["schemas"]["Conversation"][];
     };
     PaginatedDisbursementList: {
       /** @example 123 */
@@ -1425,6 +1799,13 @@ export interface components {
       | "terms_mismatch"
       | "product_unavailable"
       | "invalid_terms";
+    /**
+     * @description * `answer` - answer
+     *     * `missing_information` - missing_information
+     *     * `draft_suggestion` - draft_suggestion
+     * @enum {string}
+     */
+    ReplyTypeEnum: "answer" | "missing_information" | "draft_suggestion";
     Revision: {
       /** Format: uuid */
       readonly id: string;
@@ -1534,13 +1915,11 @@ export interface components {
      * @enum {string}
      */
     RiskLevelEnum: "low" | "medium" | "high";
-    /**
-     * @description * `owner` - Собственник
-     *     * `director` - Директор
-     *     * `accountant` - Бухгалтер
-     * @enum {string}
-     */
-    RoleEnum: "owner" | "director" | "accountant";
+    /** @description Reject extra fields instead of silently dropping status/rate/role injection. */
+    SendMessageRequest: {
+      text: string;
+      expected_version: number;
+    };
     /** @description Reject extra fields instead of silently dropping status/rate/role injection. */
     SignRequestRequest: {
       /** @description Актуальное значение из GET заявки. */
@@ -2630,6 +3009,432 @@ export interface operations {
       };
       /** @description Конфликт версии, назначения или состояния. GET карточки, проверка пользователем; не повторяйте действие автоматически. */
       409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Лимит запросов. Учитывайте Retry-After. */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description PostgreSQL временно недоступен или истёк таймаут блокировки. Проверьте карточку перед повтором значимого действия. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+    };
+  };
+  v1_assistant_conversations_list: {
+    parameters: {
+      query?: {
+        /** @description A page number within the paginated result set. */
+        page?: number;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["PaginatedConversationList"];
+        };
+      };
+      /** @description Неверный JSON, поля или параметры. Исправьте форму. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Нет сессии, полномочий или корректного CSRF. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Ресурс не существует или скрыт company scope; также страница пагинации вне диапазона. */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Лимит запросов. Учитывайте Retry-After. */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description PostgreSQL временно недоступен или истёк таймаут блокировки. Проверьте карточку перед повтором значимого действия. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+    };
+  };
+  v1_assistant_conversations_create: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CreateConversationRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["CreateConversationRequest"];
+        "multipart/form-data": components["schemas"]["CreateConversationRequest"];
+      };
+    };
+    responses: {
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Conversation"];
+        };
+      };
+      /** @description Неверный JSON, поля или параметры. Исправьте форму. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Нет сессии, полномочий или корректного CSRF. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Ресурс не существует или скрыт company scope; также страница пагинации вне диапазона. */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Конфликт версии, назначения или состояния. GET карточки, проверка пользователем; не повторяйте действие автоматически. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Лимит запросов. Учитывайте Retry-After. */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description PostgreSQL временно недоступен или истёк таймаут блокировки. Проверьте карточку перед повтором значимого действия. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+    };
+  };
+  v1_assistant_conversations_messages_retrieve: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        conversation_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["MessagePage"];
+        };
+      };
+      /** @description Неверный JSON, поля или параметры. Исправьте форму. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Нет сессии, полномочий или корректного CSRF. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Ресурс не существует или скрыт company scope; также страница пагинации вне диапазона. */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Лимит запросов. Учитывайте Retry-After. */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description PostgreSQL временно недоступен или истёк таймаут блокировки. Проверьте карточку перед повтором значимого действия. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+    };
+  };
+  v1_assistant_conversations_messages_create: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        conversation_id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SendMessageRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["SendMessageRequest"];
+        "multipart/form-data": components["schemas"]["SendMessageRequest"];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AssistantReply"];
+        };
+      };
+      /** @description Неверный JSON, поля или параметры. Исправьте форму. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Нет сессии, полномочий или корректного CSRF. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Ресурс не существует или скрыт company scope; также страница пагинации вне диапазона. */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Конфликт версии, назначения или состояния. GET карточки, проверка пользователем; не повторяйте действие автоматически. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Лимит запросов. Учитывайте Retry-After. */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description AI отключён, провайдер недоступен, контекст слишком велик или ответ не прошёл проверку схемы/источников. Основной кредитный путь доступен. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+    };
+  };
+  v1_assistant_conversations_retrieve: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description A UUID string identifying this Диалог Савелия. */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Conversation"];
+        };
+      };
+      /** @description Неверный JSON, поля или параметры. Исправьте форму. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Нет сессии, полномочий или корректного CSRF. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Ресурс не существует или скрыт company scope; также страница пагинации вне диапазона. */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Лимит запросов. Учитывайте Retry-After. */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description PostgreSQL временно недоступен или истёк таймаут блокировки. Проверьте карточку перед повтором значимого действия. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+    };
+  };
+  v1_assistant_conversations_destroy: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description A UUID string identifying this Диалог Савелия. */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description No response body */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Неверный JSON, поля или параметры. Исправьте форму. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Нет сессии, полномочий или корректного CSRF. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Ресурс не существует или скрыт company scope; также страница пагинации вне диапазона. */
+      404: {
         headers: {
           [name: string]: unknown;
         };

@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     "decisions",
     "offers",
     "agreements",
+    "assistant",
     "api",
 ]
 MIDDLEWARE = [
@@ -117,9 +118,30 @@ REST_FRAMEWORK = {
     "COERCE_DECIMAL_TO_STRING": True,
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     "DEFAULT_THROTTLE_CLASSES": ["rest_framework.throttling.UserRateThrottle"],
-    "DEFAULT_THROTTLE_RATES": {"user": "300/min", "login": "10/min"},
+    "DEFAULT_THROTTLE_RATES": {
+        "user": "300/min",
+        "login": "10/min",
+        "assistant": os.getenv("AI_USER_RATE", "10/min"),
+    },
     "EXCEPTION_HANDLER": "common.exceptions.exception_handler",
 }
+
+AI_ENABLED = os.getenv("AI_ENABLED", "false").lower() == "true"
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "compatible").lower()
+LLM_BASE_URL = os.getenv("LLM_BASE_URL", "http://host.docker.internal:11434/v1").rstrip("/")
+LLM_API_KEY = os.getenv("LLM_API_KEY", "")
+LLM_MODEL = os.getenv("LLM_MODEL", "qwen2.5:7b-instruct-q4_0")
+LLM_FALLBACK_MODELS = tuple(
+    model.strip() for model in os.getenv("LLM_FALLBACK_MODELS", "").split(",") if model.strip()
+)
+LLM_LOCAL_FALLBACK_BASE_URL = os.getenv("LLM_LOCAL_FALLBACK_BASE_URL", "").rstrip("/")
+LLM_LOCAL_FALLBACK_MODEL = os.getenv("LLM_LOCAL_FALLBACK_MODEL", "qwen2.5:7b-instruct-q4_0")
+LLM_TIMEOUT_SECONDS = min(max(float(os.getenv("LLM_TIMEOUT_SECONDS", "40")), 1), 40)
+LLM_TOTAL_TIMEOUT_SECONDS = min(max(float(os.getenv("LLM_TOTAL_TIMEOUT_SECONDS", "70")), 1), 75)
+LLM_MAX_OUTPUT_TOKENS = min(max(int(os.getenv("LLM_MAX_OUTPUT_TOKENS", "768")), 128), 2048)
+LLM_MAX_CONTEXT_CHARS = min(max(int(os.getenv("LLM_MAX_CONTEXT_CHARS", "20000")), 4000), 40000)
+AI_MAX_MESSAGE_LENGTH = min(max(int(os.getenv("AI_MAX_MESSAGE_LENGTH", "2000")), 100), 4000)
+AI_HISTORY_DAYS = min(max(int(os.getenv("AI_HISTORY_DAYS", "7")), 1), 30)
 SPECTACULAR_SETTINGS = {
     "TITLE": "Умный кредитный кабинет предпринимателя",
     "DESCRIPTION": (

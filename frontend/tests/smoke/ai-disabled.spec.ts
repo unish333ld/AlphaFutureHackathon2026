@@ -28,10 +28,10 @@ test("AI disabled: no trigger or panel; login, form and review accessibility", a
     page.getByRole("heading", { name: /Здравствуйте/ }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Помощник · демо", exact: true }),
+    page.getByRole("button", { name: "Савелий", exact: true }),
   ).toHaveCount(0);
   await expect(
-    page.getByRole("dialog", { name: "Помощник", exact: true }),
+    page.getByRole("dialog", { name: "Савелий, помощник по кредиту" }),
   ).toHaveCount(0);
   // Follow the actual app navigation instead of replacing the entire document.
   await page

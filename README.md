@@ -49,6 +49,7 @@ docker compose logs -f web
 | `backend/decisions/models.py` | Assessment, CreditDecision |
 | `backend/offers/models.py` | Offer |
 | `backend/agreements/models.py` | Agreement, Disbursement |
+| `backend/assistant/models.py` | Conversation, Message, AssistantQuota |
 
 Модель данных и связи: [docs/data-model.md](docs/data-model.md). Архитектура, состояния и допущения: [docs/architecture.md](docs/architecture.md). Пошаговые запросы: [docs/demo.http](docs/demo.http). Сгенерированная схема: [docs/openapi.yaml](docs/openapi.yaml). Проверки: [docs/verification.md](docs/verification.md).
 
@@ -64,6 +65,12 @@ docker compose logs -f web
 Версию берите из последнего `GET /applications/{id}/`: одно действие может сохранить несколько переходов. Мутирующие действия принимают только разрешённые поля; статус, риск, ставку и банковское решение назначает сервер.
 
 Демо-компании: `Рост` — одобрение, `Мастерская` — встречная меньшая сумма, `Уточнение` — новая ревизия после финансовых данных, `Проверка риска` — отказ, `Повтор проверки` — техническая ошибка и успешный `retry-checks`. `outsider` имеет доступ только к своей шестой компании. У `accountant` нет права подписи.
+
+## Савелий: локальный ИИ-помощник
+
+Для показа окна задайте `VITE_AI_ASSISTANT_ENABLED=true` при сборке frontend. Для ответов дополнительно задайте `AI_ENABLED=true` в серверном `.env` и настройте `LLM_PROVIDER`, `LLM_BASE_URL`, `LLM_MODEL`; `LLM_API_KEY` нужен только если его требует выбранный endpoint. Пример полностью локального варианта: `LLM_PROVIDER=compatible`, `LLM_BASE_URL=http://host.docker.internal:11434/v1`, `LLM_MODEL=qwen2.5:7b-instruct-q4_0` при запущенной Ollama. Настройки модели и ключ остаются только на сервере. `host.docker.internal` подходит Docker Desktop; на Linux адрес хоста может отличаться.
+
+Клиентские диалоги доступны через `/api/v1/assistant/conversations/`. Отправка сообщения требует session cookie, CSRF, текста и актуального `expected_version`. Ответ содержит текст, проверенные серверные `facts` и иногда `suggested_draft`. Предложение черновика ничего не записывает: клиент видит «было → станет» и подтверждает перенос в обычную форму. При выключенном ИИ кабинет и весь кредитный процесс работают без помощника. Настройки, ограничения, удаление истории и границы доверия: [docs/assistant.md](docs/assistant.md). Отчёт ревью: [docs/assistant-review.md](docs/assistant-review.md).
 
 ## Локальная разработка и проверки
 
@@ -101,4 +108,4 @@ HTML-отчёт: `htmlcov/index.html`. Порог покрытия — 95% по 
 
 ## Границы версии
 
-Реализованы backend и React-интерфейс. ИИ — только отключаемая визуальная заготовка (`VITE_AI_ASSISTANT_ENABLED=false` по умолчанию), без backend LLM-интеграции. Прогноз денежных потоков и стресс-тесты — следующий продуктовый этап; SLA и сложная приоритизация вне релиза. Скоринг, условия продуктов, подпись и выдача демонстрационные; реальных переводов, БКИ/ФНС, финансовых документов и платных API нет. Применены `alfa-credit-frontend`, `alfa-credit-build`, `alfa-credit-guardrails`, React- и Playwright-рекомендации; для backend — `django-expert` и PostgreSQL-рекомендации. Юридическая проверка реального банковского сервиса не проводилась. Зависимости перечислены в [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Реализованы backend и React-интерфейс. Савелий — необязательный помощник с Django API и плавающим React-окном (`AI_ENABLED=false` и `VITE_AI_ASSISTANT_ENABLED=false` по умолчанию). Прогноз денежных потоков и стресс-тесты — следующий продуктовый этап; SLA и сложная приоритизация вне релиза. Скоринг, условия продуктов, подпись и выдача демонстрационные; реальных переводов, БКИ/ФНС, финансовых документов и платных API нет. Применены `alfa-credit-frontend`, `alfa-credit-build`, `alfa-credit-guardrails`, React- и Playwright-рекомендации; для backend — `django-expert` и PostgreSQL-рекомендации. Юридическая проверка реального банковского сервиса не проводилась. Зависимости перечислены в [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

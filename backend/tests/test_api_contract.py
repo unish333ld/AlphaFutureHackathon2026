@@ -27,6 +27,12 @@ from products.models import CreditProduct
 # Every authenticated operation, including object actions, must reject anonymous callers.
 PROTECTED_OPERATIONS = [
     ("get", "me/"),
+    ("get", "assistant/conversations/"),
+    ("post", "assistant/conversations/"),
+    ("get", "assistant/conversations/{id}/"),
+    ("delete", "assistant/conversations/{id}/"),
+    ("get", "assistant/conversations/{conversation_id}/messages/"),
+    ("post", "assistant/conversations/{conversation_id}/messages/"),
     ("post", "session/logout/"),
     ("post", "calculator/payment/"),
     ("get", "companies/"),
@@ -63,7 +69,7 @@ PROTECTED_OPERATIONS = [
 
 @pytest.mark.parametrize("method,path", PROTECTED_OPERATIONS)
 def test_every_business_operation_requires_authentication(api, method, path):
-    path = path.format(id=uuid.UUID(int=1))
+    path = path.format(id=uuid.UUID(int=1), conversation_id=uuid.UUID(int=1))
     response = getattr(api, method)(f"/api/v1/{path}")
     assert response.status_code == 403
 
@@ -75,7 +81,9 @@ def test_every_authenticated_write_requires_csrf(demo, method, path):
     api = APIClient(enforce_csrf_checks=True)
     api.force_login(demo["client"])
     response = getattr(api, method)(
-        f"/api/v1/{path.format(id=uuid.UUID(int=1))}", {}, format="json"
+        f"/api/v1/{path.format(id=uuid.UUID(int=1), conversation_id=uuid.UUID(int=1))}",
+        {},
+        format="json",
     )
     assert response.status_code == 403
     assert "CSRF" in str(response.data)

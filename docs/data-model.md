@@ -22,6 +22,12 @@ erDiagram
     CreditProduct ||--o{ Offer : identifies
     Offer ||--o| Agreement : accepts
     Agreement ||--o| Disbursement : simulates
+    User ||--o{ Conversation : owns
+    Company ||--o{ Conversation : scopes
+    Application o|--o{ Conversation : contextualizes
+    CreditProduct o|--o{ Conversation : selected_product
+    Conversation ||--o{ Message : stores
+    User ||--o| AssistantQuota : limits
 ```
 
 | Модель | Поля и ограничения |
@@ -40,6 +46,9 @@ erDiagram
 | Agreement | offer OneToOne, number unique, terms_snapshot, document_hash, signed_by PROTECT, signed_at, signature_mode=simulation. CHECK согласованности подписи |
 | Disbursement | agreement OneToOne, idempotency_key unique, amount>0, status=completed, issued_at, is_simulated=true |
 | ApplicationEvent | application PROTECT, actor SET_NULL, event_type, from/to_status, details, created_at. Индекс истории |
+| Conversation | user/company PROTECT, application nullable PROTECT, selected_product nullable SET_NULL; UUID, version, created_at/updated_at. Только владелец с действующим членством видит историю |
+| Message | conversation PROTECT, role user/assistant, content, facts, suggested_draft, reply_type, questions, application_version, model_status. Append-only до явного сервисного удаления диалога/очистки истории |
+| AssistantQuota | user OneToOne CASCADE, window_start, requests. Транзакционная квота, общая для workers, без содержания сообщений |
 
 JSON-снимки имеют `schema_version=1`, формируются сервером из валидированных полей и не принимают произвольное содержимое от клиента. `input_snapshot` фиксирует компанию, настройки продукта и месячные финансы. Сумма/цель/срок остаются колонками ревизии. `schedule` содержит метод расчёта, комиссии и строки по номерам месяцев. `terms_snapshot` фиксирует принятое предложение и график; SHA-256 вычисляется по каноническому JSON с сортировкой ключей.
 
@@ -48,3 +57,5 @@ JSON-снимки имеют `schema_version=1`, формируются серв
 Межтабличные инварианты выполняют транзакционные сервисы: членство автора, актуальная ревизия, принятие и подпись конкретных условий, равенство суммы выдачи договору. Блокировка `Application` сериализует переходы. Уникальные ограничения дополнительно защищают оценки, решения, договоры и выдачи.
 
 Отправленная ревизия и зафиксированные условия защищены от обычного `save`; проверки/оценки/решения/события/выдачи используют append-only поведение. История не редактируется API или Admin. Удаление компании/пользователя не каскадирует финансовую историю. Прямой SQL/QuerySet.update остаётся привилегированной операцией и может обойти Python-защиту; физическая неизменяемость БД не заявляется.
+
+Миграции assistant.0001–0003 добавляют диалоги, типизированные метаданные и квоты без изменения кредитного процесса. Финансовые payload из чата в Web Storage не сохраняются. Переписка имеет отдельную политику хранения: 7 дней неактивности по умолчанию, явное удаление пользователем и `purge_assistant_history`; это не удаляет кредитные события. Подробности — [assistant.md](assistant.md).

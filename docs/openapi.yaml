@@ -528,7 +528,7 @@ paths:
               Заявка:
                 value:
                   company: 00000000-0000-0000-0000-000000000001
-                  product: 00000000-0000-0000-0000-000000000101
+                  product: 00000000-0000-0000-0000-000000000065
                   amount: '1000000.00'
                   term_months: 24
                   purpose: Пополнение оборотных средств
@@ -1321,6 +1321,557 @@ paths:
                   summary: Пример ошибки
           description: Конфликт версии, назначения или состояния. GET карточки, проверка
             пользователем; не повторяйте действие автоматически.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
+  /api/v1/assistant/conversations/:
+    get:
+      operationId: v1_assistant_conversations_list
+      summary: Мои диалоги
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      tags:
+      - Савелий
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedConversationList'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
+    post:
+      operationId: v1_assistant_conversations_create
+      summary: Начать диалог для своей компании
+      tags:
+      - Савелий
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateConversationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CreateConversationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CreateConversationRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Загрузите заявку заново.
+                    code: stale_version
+                  summary: Пример ошибки
+          description: Конфликт версии, назначения или состояния. GET карточки, проверка
+            пользователем; не повторяйте действие автоматически.
+  /api/v1/assistant/conversations/{conversation_id}/messages/:
+    get:
+      operationId: v1_assistant_conversations_messages_retrieve
+      summary: Сообщения моего диалога
+      parameters:
+      - in: path
+        name: conversation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Савелий
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessagePage'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
+    post:
+      operationId: v1_assistant_conversations_messages_create
+      description: Требует session cookie, CSRF и актуальную версию диалога. Помощник
+        не меняет заявку и не принимает кредитное решение. reply_type определяет ответ/уточнение/предложение
+        полей; facts — только серверные источники текущего ответа. model_status=degraded
+        означает, что после чтения фактов модель не завершила объяснение. В таком
+        случае показаны только факты. 409 требует сверки истории и карточки без автоматического
+        повтора; 429 — соблюдения Retry-After. application_version фиксирует версию
+        заявки на момент ответа. Перед переносом suggested_draft проверить неизменность
+        формы и показать подтверждение. История ограничена AI_HISTORY_DAYS.
+      summary: Спросить Савелия
+      parameters:
+      - in: path
+        name: conversation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - Савелий
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+            examples:
+              ПредложитьПараметры:
+                value:
+                  text: Нужен миллион на закупку товара на год
+                  expected_version: 0
+                summary: Предложить параметры
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssistantReply'
+          description: ''
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПомощникНедоступен:
+                  value:
+                    detail: Савелий сейчас недоступен. Кредитный кабинет работает
+                      без помощника.
+                    code: assistant_unavailable
+                  summary: Помощник недоступен
+          description: AI отключён, провайдер недоступен, контекст слишком велик или
+            ответ не прошёл проверку схемы/источников. Основной кредитный путь доступен.
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Загрузите заявку заново.
+                    code: stale_version
+                  summary: Пример ошибки
+          description: Конфликт версии, назначения или состояния. GET карточки, проверка
+            пользователем; не повторяйте действие автоматически.
+  /api/v1/assistant/conversations/{id}/:
+    get:
+      operationId: v1_assistant_conversations_retrieve
+      summary: Мой диалог
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Диалог Савелия.
+        required: true
+      tags:
+      - Савелий
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
+    delete:
+      operationId: v1_assistant_conversations_destroy
+      summary: Удалить мой диалог и все сообщения
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Диалог Савелия.
+        required: true
+      tags:
+      - Савелий
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
         '429':
           content:
             application/json:
@@ -3936,6 +4487,23 @@ components:
       - risk_level
       - rules_version
       - score
+    AssistantReply:
+      type: object
+      properties:
+        conversation_id:
+          type: string
+          format: uuid
+        version:
+          type: integer
+        model_status:
+          $ref: '#/components/schemas/ModelStatusEnum'
+        message:
+          $ref: '#/components/schemas/Message'
+      required:
+      - conversation_id
+      - message
+      - model_status
+      - version
     AvailableAction:
       type: object
       properties:
@@ -4141,6 +4709,60 @@ components:
       description: |-
         * `active` - Действует
         * `inactive` - Деятельность прекращена
+    Conversation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        company:
+          type: string
+          format: uuid
+          readOnly: true
+        application:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        application_number:
+          type: string
+          readOnly: true
+          nullable: true
+        version:
+          type: integer
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Создано
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - application
+      - application_number
+      - company
+      - created_at
+      - id
+      - updated_at
+      - version
+    CreateConversationRequest:
+      type: object
+      description: Reject extra fields instead of silently dropping status/rate/role
+        injection.
+      properties:
+        company_id:
+          type: string
+          format: uuid
+        application_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - company_id
     CreditDecision:
       type: object
       properties:
@@ -4464,7 +5086,7 @@ components:
           readOnly: true
         role:
           allOf:
-          - $ref: '#/components/schemas/RoleEnum'
+          - $ref: '#/components/schemas/MemberRoleEnum'
           readOnly: true
           title: Роль в компании
         can_submit:
@@ -4485,6 +5107,639 @@ components:
       - can_submit
       - company
       - role
+    MemberRoleEnum:
+      enum:
+      - owner
+      - director
+      - accountant
+      type: string
+      description: |-
+        * `owner` - Собственник
+        * `director` - Директор
+        * `accountant` - Бухгалтер
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        role:
+          allOf:
+          - $ref: '#/components/schemas/MessageRoleEnum'
+          readOnly: true
+        content:
+          type: string
+          readOnly: true
+        facts:
+          type: array
+          maxItems: 2
+          items:
+            oneOf:
+            - type: object
+              properties:
+                id:
+                  type: string
+                source:
+                  type: string
+                  enum:
+                  - get_company_profile
+                data:
+                  type: object
+                  properties:
+                    company_id:
+                      type: string
+                      format: uuid
+                    name:
+                      type: string
+                    kind:
+                      type: string
+                    registered_at:
+                      type: string
+                      format: date
+                    status:
+                      type: string
+                    monthly_financial_history_available:
+                      type: boolean
+                  required:
+                  - company_id
+                  - name
+                  - kind
+                  - registered_at
+                  - status
+                  - monthly_financial_history_available
+                  additionalProperties: false
+              required:
+              - id
+              - source
+              - data
+              additionalProperties: false
+            - type: object
+              properties:
+                id:
+                  type: string
+                source:
+                  type: string
+                  enum:
+                  - list_credit_products
+                data:
+                  type: object
+                  properties:
+                    products:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            format: uuid
+                          code:
+                            type: string
+                          name:
+                            type: string
+                          description:
+                            type: string
+                          min_amount:
+                            type: string
+                            pattern: ^-?\d+\.\d{2}$
+                            example: '1000000.00'
+                          max_amount:
+                            type: string
+                            pattern: ^-?\d+\.\d{2}$
+                            example: '1000000.00'
+                          min_term_months:
+                            type: integer
+                            minimum: 1
+                            maximum: 120
+                          max_term_months:
+                            type: integer
+                            minimum: 1
+                            maximum: 120
+                          demo_annual_rate:
+                            type: string
+                            pattern: ^\d+(\.\d+)?$
+                            example: '18.0000'
+                        required:
+                        - id
+                        - code
+                        - name
+                        - description
+                        - min_amount
+                        - max_amount
+                        - min_term_months
+                        - max_term_months
+                        - demo_annual_rate
+                        additionalProperties: false
+                  required:
+                  - products
+                  additionalProperties: false
+              required:
+              - id
+              - source
+              - data
+              additionalProperties: false
+            - type: object
+              properties:
+                id:
+                  type: string
+                source:
+                  type: string
+                  enum:
+                  - get_application_status
+                data:
+                  oneOf:
+                  - type: object
+                    properties:
+                      application_id:
+                        type: string
+                        format: uuid
+                      number:
+                        type: string
+                      status:
+                        type: string
+                        enum:
+                        - draft
+                        - submitted
+                        - checking
+                        - review
+                        - needs_info
+                        - offered
+                        - accepted
+                        - signed
+                        - issued
+                        - rejected
+                        - declined
+                        - expired
+                      lock_version:
+                        type: integer
+                        minimum: 0
+                      product:
+                        type: string
+                      available_actions:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            action:
+                              type: string
+                              enum:
+                              - update_draft
+                              - submit
+                              - retry_checks
+                              - provide_information
+                              - revise
+                              - claim
+                              - release
+                              - request_information
+                              - decide
+                              - accept_offer
+                              - decline_offer
+                              - sign_agreement
+                              - disburse
+                            allowed:
+                              type: boolean
+                            reason_code:
+                              type: string
+                              enum:
+                              - role_required
+                              - capability_required
+                              - assignment_required
+                              - assigned_to_other
+                              - already_assigned
+                              - not_assigned
+                              - invalid_state
+                              - needs_information
+                              - technical_error
+                              - retry_limit
+                              - waiting_for_client
+                              - offer_expired
+                              - assessment_unavailable
+                              - assessment_outdated
+                              - checks_incomplete
+                              - already_completed
+                              - no_current_revision
+                              - terms_mismatch
+                              - product_unavailable
+                              - invalid_terms
+                              - null
+                              nullable: true
+                            target_id:
+                              type: string
+                              format: uuid
+                              nullable: true
+                          required:
+                          - action
+                          - allowed
+                          - reason_code
+                          - target_id
+                          additionalProperties: false
+                      request:
+                        type: object
+                        properties:
+                          amount:
+                            type: string
+                            pattern: ^-?\d+\.\d{2}$
+                            example: '1000000.00'
+                          term_months:
+                            type: integer
+                            minimum: 1
+                            maximum: 120
+                          purpose:
+                            type: string
+                          revision_no:
+                            type: integer
+                        required:
+                        - amount
+                        - term_months
+                        - purpose
+                        - revision_no
+                        additionalProperties: false
+                      missing_information:
+                        type: array
+                        items:
+                          type: string
+                      decision:
+                        type: object
+                        properties:
+                          outcome:
+                            type: string
+                            enum:
+                            - approved
+                            - counteroffer
+                            - rejected
+                          reason_code:
+                            type: string
+                          explanation:
+                            type: string
+                        required:
+                        - outcome
+                        - reason_code
+                        - explanation
+                        additionalProperties: false
+                      offer:
+                        type: object
+                        properties:
+                          status:
+                            type: string
+                          amount:
+                            type: string
+                            pattern: ^-?\d+\.\d{2}$
+                            example: '1000000.00'
+                          annual_rate:
+                            type: string
+                            pattern: ^\d+(\.\d+)?$
+                            example: '18.0000'
+                          term_months:
+                            type: integer
+                            minimum: 1
+                            maximum: 120
+                          monthly_payment:
+                            type: string
+                            pattern: ^-?\d+\.\d{2}$
+                            example: '1000000.00'
+                          expires_at:
+                            type: string
+                            format: date-time
+                          sign_before:
+                            type: string
+                            format: date-time
+                            nullable: true
+                        required:
+                        - status
+                        - amount
+                        - annual_rate
+                        - term_months
+                        - monthly_payment
+                        - expires_at
+                        - sign_before
+                        additionalProperties: false
+                      signed:
+                        type: boolean
+                      issued:
+                        type: boolean
+                    required:
+                    - application_id
+                    - number
+                    - status
+                    - lock_version
+                    - product
+                    - available_actions
+                    additionalProperties: false
+                  - type: object
+                    properties:
+                      state:
+                        type: string
+                        enum:
+                        - no_application_selected
+                    required:
+                    - state
+                    additionalProperties: false
+              required:
+              - id
+              - source
+              - data
+              additionalProperties: false
+            - type: object
+              properties:
+                id:
+                  type: string
+                source:
+                  type: string
+                  enum:
+                  - calculate_payment
+                data:
+                  oneOf:
+                  - type: object
+                    properties:
+                      product_code:
+                        type: string
+                      amount:
+                        type: string
+                        pattern: ^-?\d+\.\d{2}$
+                        example: '1000000.00'
+                      term_months:
+                        type: integer
+                        minimum: 1
+                        maximum: 120
+                      demo_annual_rate:
+                        type: string
+                        pattern: ^\d+(\.\d+)?$
+                        example: '18.0000'
+                      monthly_payment:
+                        type: string
+                        pattern: ^-?\d+\.\d{2}$
+                        example: '1000000.00'
+                      total_overpayment:
+                        type: string
+                        pattern: ^-?\d+\.\d{2}$
+                        example: '1000000.00'
+                      is_preliminary:
+                        type: boolean
+                        enum:
+                        - true
+                    required:
+                    - product_code
+                    - amount
+                    - term_months
+                    - demo_annual_rate
+                    - monthly_payment
+                    - total_overpayment
+                    - is_preliminary
+                    additionalProperties: false
+                  - type: object
+                    properties:
+                      error:
+                        type: string
+                        enum:
+                        - unknown_product_code
+                      message:
+                        type: string
+                      available_products:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            code:
+                              type: string
+                            name:
+                              type: string
+                          required:
+                          - code
+                          - name
+                          additionalProperties: false
+                    required:
+                    - error
+                    - message
+                    - available_products
+                    additionalProperties: false
+                  - type: object
+                    properties:
+                      state:
+                        type: string
+                        enum:
+                        - missing_information
+                      required_fields:
+                        type: array
+                        items:
+                          type: string
+                          enum:
+                          - ambiguity
+                          - product
+                          - amount
+                          - term_months
+                    required:
+                    - state
+                    - required_fields
+                    additionalProperties: false
+              required:
+              - id
+              - source
+              - data
+              additionalProperties: false
+            - type: object
+              properties:
+                id:
+                  type: string
+                source:
+                  type: string
+                  enum:
+                  - suggest_application_draft
+                data:
+                  oneOf:
+                  - type: object
+                    properties:
+                      company:
+                        type: string
+                        format: uuid
+                      product:
+                        type: string
+                        format: uuid
+                      amount:
+                        type: string
+                        pattern: ^-?\d+\.\d{2}$
+                        example: '1000000.00'
+                      term_months:
+                        type: integer
+                        minimum: 1
+                        maximum: 120
+                      purpose:
+                        type: string
+                      requires_user_confirmation:
+                        type: boolean
+                        enum:
+                        - true
+                    required:
+                    - company
+                    - product
+                    - amount
+                    - term_months
+                    - purpose
+                    - requires_user_confirmation
+                    additionalProperties: false
+                  - type: object
+                    properties:
+                      error:
+                        type: string
+                        enum:
+                        - unknown_product_code
+                      message:
+                        type: string
+                      available_products:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            code:
+                              type: string
+                            name:
+                              type: string
+                          required:
+                          - code
+                          - name
+                          additionalProperties: false
+                    required:
+                    - error
+                    - message
+                    - available_products
+                    additionalProperties: false
+                  - type: object
+                    properties:
+                      state:
+                        type: string
+                        enum:
+                        - missing_information
+                      required_fields:
+                        type: array
+                        items:
+                          type: string
+                          enum:
+                          - ambiguity
+                          - product
+                          - amount
+                          - term_months
+                    required:
+                    - state
+                    - required_fields
+                    additionalProperties: false
+              required:
+              - id
+              - source
+              - data
+              additionalProperties: false
+          readOnly: true
+        suggested_draft:
+          oneOf:
+          - type: object
+            maxProperties: 0
+            additionalProperties: false
+          - type: object
+            properties:
+              company:
+                type: string
+                format: uuid
+              product:
+                type: string
+                format: uuid
+              amount:
+                type: string
+                pattern: ^-?\d+\.\d{2}$
+                example: '1000000.00'
+              term_months:
+                type: integer
+                minimum: 1
+                maximum: 120
+              purpose:
+                type: string
+              requires_user_confirmation:
+                type: boolean
+                enum:
+                - true
+            required:
+            - company
+            - product
+            - amount
+            - term_months
+            - purpose
+            - requires_user_confirmation
+            additionalProperties: false
+          readOnly: true
+        reply_type:
+          allOf:
+          - $ref: '#/components/schemas/ReplyTypeEnum'
+          readOnly: true
+        questions:
+          type: array
+          items:
+            type: string
+          readOnly: true
+        application_id:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        application_version:
+          type: integer
+          readOnly: true
+          nullable: true
+        model_status:
+          allOf:
+          - $ref: '#/components/schemas/ModelStatusEnum'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Создано
+      required:
+      - application_id
+      - application_version
+      - content
+      - created_at
+      - facts
+      - id
+      - model_status
+      - questions
+      - reply_type
+      - role
+      - suggested_draft
+    MessagePage:
+      type: object
+      properties:
+        count:
+          type: integer
+        next:
+          type: string
+          format: uri
+          nullable: true
+        previous:
+          type: string
+          format: uri
+          nullable: true
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+      required:
+      - count
+      - next
+      - previous
+      - results
+    MessageRoleEnum:
+      enum:
+      - user
+      - assistant
+      type: string
+      description: |-
+        * `user` - Клиент
+        * `assistant` - Савелий
+    ModelStatusEnum:
+      enum:
+      - available
+      - degraded
+      type: string
+      description: |-
+        * `available` - available
+        * `degraded` - degraded
     NullEnum:
       enum:
       - null
@@ -4725,6 +5980,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Company'
+    PaginatedConversationList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Conversation'
     PaginatedDisbursementList:
       type: object
       required:
@@ -5073,6 +6351,16 @@ components:
         * `terms_mismatch` - terms_mismatch
         * `product_unavailable` - product_unavailable
         * `invalid_terms` - invalid_terms
+    ReplyTypeEnum:
+      enum:
+      - answer
+      - missing_information
+      - draft_suggestion
+      type: string
+      description: |-
+        * `answer` - answer
+        * `missing_information` - missing_information
+        * `draft_suggestion` - draft_suggestion
     Revision:
       type: object
       properties:
@@ -5329,16 +6617,21 @@ components:
         * `low` - Низкий
         * `medium` - Средний
         * `high` - Высокий
-    RoleEnum:
-      enum:
-      - owner
-      - director
-      - accountant
-      type: string
-      description: |-
-        * `owner` - Собственник
-        * `director` - Директор
-        * `accountant` - Бухгалтер
+    SendMessageRequest:
+      type: object
+      description: Reject extra fields instead of silently dropping status/rate/role
+        injection.
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        expected_version:
+          type: integer
+          minimum: 0
+      required:
+      - expected_version
+      - text
     SignRequestRequest:
       type: object
       description: Reject extra fields instead of silently dropping status/rate/role

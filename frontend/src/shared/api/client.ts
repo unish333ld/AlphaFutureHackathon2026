@@ -11,6 +11,9 @@ export type Action = Schema["AvailableAction"];
 export type ActionName = Schema["ActionEnum"];
 export type Status = Schema["ApplicationStatusEnum"];
 export type Agreement = Schema["Agreement"];
+export type AssistantConversation = Schema["Conversation"];
+export type AssistantMessage = Schema["Message"];
+export type AssistantReply = Schema["AssistantReply"];
 export type Page<T> = {
   count: number;
   next: string | null;
@@ -150,5 +153,32 @@ export const api = {
     request<Schema["PaymentResponse"]>("calculator/payment/", {
       method: "POST",
       body: data,
+    }),
+  assistantConversations: (page = 1, signal?: AbortSignal) =>
+    request<Page<AssistantConversation>>(
+      `assistant/conversations/${query({ page })}`,
+      { signal },
+    ),
+  assistantConversation: (id: string, signal?: AbortSignal) =>
+    request<AssistantConversation>(`assistant/conversations/${id}/`, {
+      signal,
+    }),
+  assistantDeleteConversation: (id: string) =>
+    request<void>(`assistant/conversations/${id}/`, { method: "DELETE" }),
+  assistantCreateConversation: (company_id: string, application_id?: string) =>
+    request<AssistantConversation>("assistant/conversations/", {
+      method: "POST",
+      body: { company_id, ...(application_id ? { application_id } : {}) },
+    }),
+  assistantMessages: (id: string, page = 1, signal?: AbortSignal) =>
+    request<Page<AssistantMessage>>(
+      `assistant/conversations/${id}/messages/${query({ page })}`,
+      { signal },
+    ),
+  assistantSend: (id: string, text: string, expected_version: number) =>
+    request<AssistantReply>(`assistant/conversations/${id}/messages/`, {
+      method: "POST",
+      body: { text, expected_version },
+      timeoutMs: 90_000,
     }),
 };

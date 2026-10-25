@@ -8,6 +8,8 @@
 @agreement = replace-with-agreement-uuid
 @version = 0
 @hash = replace-with-document-hash
+@conversation = replace-with-conversation-uuid
+@conversation_version = 0
 
 ### Получить cookie и CSRF-токен
 GET {{base}}/session/csrf/
@@ -33,7 +35,7 @@ POST {{base}}/applications/
 Content-Type: application/json
 X-CSRFToken: {{csrf}}
 
-{"company":"00000000-0000-0000-0000-000000000001","product":"00000000-0000-0000-0000-000000000101","amount":"1000000.00","term_months":24,"purpose":"Оборотные средства","monthly_revenue":"1500000.00","monthly_expenses":"900000.00","monthly_debt_payments":"50000.00"}
+{"company":"00000000-0000-0000-0000-000000000001","product":"00000000-0000-0000-0000-000000000065","amount":"1000000.00","term_months":24,"purpose":"Оборотные средства","monthly_revenue":"1500000.00","monthly_expenses":"900000.00","monthly_debt_payments":"50000.00"}
 
 ### Отправить. Обновите @version из ответа.
 POST {{base}}/applications/{{application}}/submit/
@@ -125,3 +127,24 @@ X-CSRFToken: {{csrf}}
 
 ### После 409 — только обновить карточку и проверить данные пользователем, без автоматического повтора.
 GET {{base}}/staff/applications/{{application}}/
+
+### Савелий (клиент, AI_ENABLED=true и настроенная модель). Только синтетические данные.
+POST {{base}}/assistant/conversations/
+Content-Type: application/json
+X-CSRFToken: {{csrf}}
+
+{"company_id":"00000000-0000-0000-0000-000000000001"}
+
+### Обновите @conversation из ответа и @conversation_version после каждого ответа.
+POST {{base}}/assistant/conversations/{{conversation}}/messages/
+Content-Type: application/json
+X-CSRFToken: {{csrf}}
+
+{"text":"Нужен миллион на закупку товара на год","expected_version":{{conversation_version}}}
+
+### Проверить историю после неопределённого результата, без автоматического повтора.
+GET {{base}}/assistant/conversations/{{conversation}}/messages/
+
+### Явное удаление собственного диалога и переписки (204).
+DELETE {{base}}/assistant/conversations/{{conversation}}/
+X-CSRFToken: {{csrf}}

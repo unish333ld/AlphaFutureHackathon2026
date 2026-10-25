@@ -1,0 +1,255 @@
+.launcher {
+  position: fixed;
+  right: 24px;
+  bottom: max(24px, env(safe-area-inset-bottom));
+  z-index: 35;
+}
+.launcher[hidden] {
+  display: none;
+}
+.window {
+  position: fixed;
+  inset: 0 0 0 auto;
+  width: 440px;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  z-index: 36;
+  background: #fff;
+  border-left: 1px solid #dfe3e8;
+  box-shadow: -4px 0 20px #1822300a;
+  color: #202329;
+}
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 20px 16px 12px;
+  border-bottom: 1px solid #e3e6eb;
+}
+.header h2 {
+  font-size: 20px;
+  margin: 0 0 4px;
+  overflow-wrap: anywhere;
+}
+.header span,
+.hint {
+  color: #4c5562;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.context {
+  padding: 12px 16px;
+  display: grid;
+  gap: 8px;
+  border-bottom: 1px solid #e3e6eb;
+}
+.context > strong {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.messages {
+  flex: 1;
+  min-height: 0;
+  padding: 16px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.messages > * {
+  flex-shrink: 0;
+}
+.messages p {
+  margin: 4px 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.messages ul {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+.userMessage,
+.assistantMessage {
+  max-width: 100%;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.userMessage {
+  border-radius: 12px;
+  background: #f3f4f6;
+  padding: 12px;
+  margin-left: 20px;
+}
+.assistantMessage {
+  border-bottom: 1px solid #e3e6eb;
+  padding-bottom: 12px;
+}
+.userMessage > strong,
+.assistantMessage > strong {
+  color: #4c5562;
+  font-size: 13px;
+}
+.fact {
+  display: grid;
+  gap: 5px;
+  padding: 12px;
+  margin: 8px 0;
+  border: 1px solid #dfe3e8;
+  border-radius: 12px;
+  background: #fafbfc;
+  font-variant-numeric: tabular-nums;
+}
+.fact strong {
+  font-size: 15px;
+}
+.fact small {
+  font-size: 13px;
+  color: #4c5562;
+}
+.fact a,
+.context button {
+  overflow-wrap: anywhere;
+}
+.composer {
+  padding: 8px 16px max(16px, env(safe-area-inset-bottom));
+  border-top: 1px solid #e3e6eb;
+  max-height: 60%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.composer .hint {
+  margin: 4px 0;
+}
+.sendRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+}
+.sendRow small {
+  font-size: 13px;
+  color: #4c5562;
+}
+.sendRow > button {
+  flex-shrink: 0;
+}
+.prompts {
+  display: grid;
+  gap: 6px;
+  margin: 6px 0 12px;
+}
+.prompts button {
+  border: 1px solid #dfe3e8;
+  border-radius: 8px;
+  background: #fff;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  color: #202329;
+  cursor: pointer;
+}
+.prompts button:hover {
+  background: #f3f4f6;
+}
+.prompts button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.window :focus-visible {
+  outline: 2px solid #d02a20;
+  outline-offset: 3px;
+}
+.historyList {
+  flex: 1;
+  min-height: 0;
+  padding: 16px;
+  overflow-y: auto;
+}
+.historyItem {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  padding: 12px 8px;
+  margin-bottom: 8px;
+  border: 1px solid #dfe3e8;
+  border-radius: 8px;
+  background: #fff;
+  text-align: left;
+  font: inherit;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.historyItem:hover {
+  background: #f3f4f6;
+}
+.historyItem small {
+  font-size: 13px;
+  color: #4c5562;
+}
+.pageButtons {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+@media (min-width: 1180px) {
+  :global(body[data-assistant-open="true"] #root) {
+    padding-right: 440px;
+  }
+}
+@media (max-width: 1179px) {
+  :global(body[data-assistant-open="true"]) {
+    overflow: hidden;
+  }
+  .window {
+    width: 100%;
+    max-width: 100%;
+    border-left: 0;
+  }
+  .header {
+    padding-top: max(12px, env(safe-area-inset-top));
+  }
+  .launcher {
+    right: 16px;
+    bottom: max(16px, env(safe-area-inset-bottom));
+  }
+}
+@media (max-height: 500px) {
+  .window {
+    overflow-y: auto;
+  }
+  .header {
+    padding: 8px 12px;
+  }
+  .header h2 {
+    font-size: 16px;
+  }
+  .header span {
+    display: none;
+  }
+  .context {
+    padding: 6px 12px;
+  }
+  .messages {
+    min-height: 60px;
+  }
+  .composer {
+    flex-shrink: 0;
+    max-height: none;
+  }
+  .prompts {
+    margin: 4px 0;
+  }
+}
