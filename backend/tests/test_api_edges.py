@@ -157,6 +157,14 @@ def test_only_specialist_can_make_a_credit_decision(demo, api):
         api,
         demo["specialist"],
         "post",
+        f"staff/applications/{app.id}/claim/",
+        {"lock_version": app.lock_version},
+    )
+    app.refresh_from_db()
+    decided = request(
+        api,
+        demo["specialist"],
+        "post",
         f"staff/applications/{app.id}/decide/",
         {"lock_version": app.lock_version},
     )
@@ -213,6 +221,14 @@ def test_sign_rejects_database_tampering_of_frozen_terms(demo, api):
     app.refresh_from_db()
     request(api, demo["client"], "post", f"applications/{app.id}/submit/", {"lock_version": 0})
     app.refresh_from_db()
+    request(
+        api,
+        demo["specialist"],
+        "post",
+        f"staff/applications/{app.id}/claim/",
+        {"lock_version": app.lock_version},
+    )
+    app.refresh_from_db()
     result = request(
         api,
         demo["specialist"],
@@ -254,6 +270,14 @@ def test_sign_rejects_database_tampering_of_frozen_terms(demo, api):
 def test_disbursement_requires_valid_idempotency_uuid_and_matches_frozen_amount(demo, api):
     app = demo["applications"]["approval"]
     request(api, demo["client"], "post", f"applications/{app.id}/submit/", {"lock_version": 0})
+    app.refresh_from_db()
+    request(
+        api,
+        demo["specialist"],
+        "post",
+        f"staff/applications/{app.id}/claim/",
+        {"lock_version": app.lock_version},
+    )
     app.refresh_from_db()
     result = request(
         api,

@@ -10,6 +10,8 @@ def require_specialist(user):
 
 
 def require_member(user, company_id, capability=None):
+    if not user.is_authenticated or not user.is_active or user.system_role != "client":
+        raise PermissionDenied("Действие доступно активному представителю компании.")
     membership = CompanyMember.objects.filter(user=user, company_id=company_id, active=True).first()
     if membership is None:
         raise Http404

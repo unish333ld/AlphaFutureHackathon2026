@@ -1,6 +1,16 @@
 /skills/
 .venv/
 .deps/
+node_modules/
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+frontend/test-results-linux/
+frontend/playwright-report-linux/
+frontend/test-results-*/
+frontend/playwright-report-*/
+frontend/.auth/
+*.tsbuildinfo
 __pycache__/
 *.py[cod]
 .pytest_cache/

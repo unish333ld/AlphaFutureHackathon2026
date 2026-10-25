@@ -1,6 +1,12 @@
 # Умный кредитный кабинет предпринимателя
 
-Backend хакатонного прототипа на Django 5.2 LTS, Django REST Framework, PostgreSQL 18 и drf-spectacular. Реализованы модели, миграции и API кредитного процесса с синтетическими данными, локальными проверками, условной подписью и моделируемой выдачей.
+Full-stack хакатонный прототип: Django 5.2 LTS, Django REST Framework, PostgreSQL 18, drf-spectacular и React-интерфейс клиента и кредитного специалиста. Единый кредитный процесс использует синтетические данные, локальные проверки, условную подпись и моделируемую выдачу.
+
+Актуальный [стек и границы релиза](docs/stack.md): Python/Django/DRF/PostgreSQL; React + TypeScript strict + Vite, Core Components Альфа-Банка, CSS Modules/Grid/Flexbox/медиазапросы, React Router, TanStack Query, React Hook Form/Zod. Django sessions + HttpOnly cookie + CSRF, drf-spectacular/OpenAPI/Swagger UI; Docker Compose, Nginx для frontend/API proxy. pytest/pytest-django, Vitest и Playwright. Bootstrap в основном приложении не используется. [Frontend: запуск, экраны и тесты](docs/frontend.md).
+
+Для frontend: [OpenAPI](docs/openapi.yaml) и [экран сотрудника → API, назначения, действия, ошибки и сессии](docs/frontend-integration.md).
+
+Дополнительный [QA-отчёт: вход, сохранение ввода и браузерная регрессия](docs/qa-auth-verification.md).
 
 ## Запуск через Docker
 
@@ -17,9 +23,10 @@ docker compose up --build -d --wait --wait-timeout 120
 docker compose logs -f web
 ```
 
-Миграции, static-файлы Swagger и seeds выполняются при старте. PostgreSQL доступен внутри Compose; веб-сервис слушает `127.0.0.1:8000`.
+Миграции, static-файлы Swagger и seeds выполняются при старте. PostgreSQL доступен внутри Compose; Nginx отдаёт интерфейс на **http://localhost:8080**, а API доступен с того же origin `/api/`. Прямой backend слушает `127.0.0.1:8000`; не смешивайте разные origin в одной браузерной сессии.
 
 - Swagger: http://localhost:8000/api/docs/
+- Swagger через frontend origin: http://localhost:8080/api/docs/
 - Вход для Swagger: http://localhost:8000/api/session/login/
 - ReDoc: http://localhost:8000/api/redoc/
 - OpenAPI: http://localhost:8000/api/schema/
@@ -50,26 +57,20 @@ docker compose logs -f web
 
 1. Войдите как `client`. В `GET /api/v1/applications/` есть пять черновиков. `Демо · Рост` предназначен для одобрения. Новая заявка создаётся через `POST /applications/` с UUID из справочников компаний и продуктов.
 2. Вызовите `POST /applications/{id}/submit/` с текущим `lock_version`. Проверки синхронные и локальные; стандартная заявка перейдёт в `review`.
-3. Войдите как `specialist`. `POST /staff/applications/{id}/decide/` с новой версией применит серверную демо-политику и создаст предложение либо отказ.
+3. Войдите как `specialist`. Сначала `POST /staff/applications/{id}/claim/` с lock_version, затем `POST /staff/applications/{id}/decide/` с версией из claim. Серверная политика создаст предложение либо отказ. Освободить свою заявку: `/release/`. Очередь «мои»: `GET /staff/applications/?assignment=mine`, свободные — `assignment=free`.
 4. Как `client`: `POST /offers/{id}/accept/`. В ответе появится демо-договор с зафиксированными условиями и `document_hash`.
 5. `POST /agreements/{id}/sign/`: `lock_version`, `document_hash`, `confirm_simulation=true`.
-6. Как `specialist`: `POST /agreements/{id}/disburse/` с новой версией и UUID в заголовке `Idempotency-Key`. Повтор того же ключа и договора вернёт ту же выдачу. Клиент видит результат в карточке и `/disbursements/`.
+6. Как назначенный `specialist`: `POST /agreements/{id}/disburse/` с новой версией и UUID в заголовке `Idempotency-Key`. Повтор того же ключа и договора вернёт ту же выдачу. Клиент видит результат в карточке и `/disbursements/`. Завершение автоматически снимает назначение.
 
 Версию берите из последнего `GET /applications/{id}/`: одно действие может сохранить несколько переходов. Мутирующие действия принимают только разрешённые поля; статус, риск, ставку и банковское решение назначает сервер.
 
 Демо-компании: `Рост` — одобрение, `Мастерская` — встречная меньшая сумма, `Уточнение` — новая ревизия после финансовых данных, `Проверка риска` — отказ, `Повтор проверки` — техническая ошибка и успешный `retry-checks`. `outsider` имеет доступ только к своей шестой компании. У `accountant` нет права подписи.
 
-## Савелий: backend помощника
+## Савелий: локальный ИИ-помощник
 
-Помощник выключен по умолчанию (`AI_ENABLED=false`), а кредитный процесс работает без него. Он использует OpenAI-совместимый Chat Completions API; модель, URL и ключ меняются настройками без правки кода. `.env.example` показывает OpenRouter с бесплатной открытовесной `google/gemma-4-26b-a4b-it:free`, резервной `nvidia/nemotron-3.5-lightning:free` и необязательной локальной Ollama. Для включения задайте **только на сервере** `AI_ENABLED=true` и `LLM_API_KEY` в игнорируемом `.env`, затем пересоздайте контейнер web. Не добавляйте ключ в Git, frontend, URL или Swagger. Судьи могут подставить свой OpenAI-совместимый URL, ключ и модель в те же переменные.
+Для показа окна задайте `VITE_AI_ASSISTANT_ENABLED=true` при сборке frontend. Для ответов дополнительно задайте `AI_ENABLED=true` в серверном `.env` и настройте `LLM_PROVIDER`, `LLM_BASE_URL`, `LLM_MODEL`; `LLM_API_KEY` нужен только если его требует выбранный endpoint. Пример полностью локального варианта: `LLM_PROVIDER=compatible`, `LLM_BASE_URL=http://host.docker.internal:11434/v1`, `LLM_MODEL=qwen2.5:7b-instruct-q4_0` при запущенной Ollama. Настройки модели и ключ остаются только на сервере. `host.docker.internal` подходит Docker Desktop; на Linux адрес хоста может отличаться.
 
-При ошибке основной модели OpenRouter пробует следующую из `LLM_FALLBACK_MODELS`. При сетевой ошибке, превышении квоты или недоступности OpenRouter backend обращается к `LLM_LOCAL_FALLBACK_BASE_URL`, если там запущена Ollama с `LLM_LOCAL_FALLBACK_MODEL`. Этот адрес должен быть доступен **из контейнера web**; `host.docker.internal` подходит для локального Docker Desktop и не является универсальным адресом для Linux-хоста. Для полностью локального режима задайте `LLM_PROVIDER=compatible`, `LLM_BASE_URL=http://host.docker.internal:11434/v1`, `LLM_MODEL=qwen2.5:7b-instruct-q4_0`; ключ не нужен. Если нет ни облака, ни локальной модели, оставьте `AI_ENABLED=false`.
-
-Бесплатная квота OpenRouter на обычном аккаунте — 50 запросов в день и 20 в минуту; вопрос с инструментом обычно расходует два запроса, а переключение между бесплатными моделями не увеличивает квоту аккаунта. Проверяйте [актуальные лимиты](https://openrouter.ai/docs/api_reference/limits) и [каталог моделей](https://openrouter.ai/api/v1/models) перед показом. Бесплатный endpoint NVIDIA [может записывать запросы](https://openrouter.ai/nvidia/nemotron-3.5-lightning:free); используйте только синтетические демо-данные. Ключ OpenRouter и качество ответов облачных моделей на целевом аккаунте требуют отдельной живой проверки.
-
-Клиент создаёт диалог через `POST /api/v1/assistant/conversations/` с `company_id` и необязательным `application_id`. `GET /api/v1/assistant/conversations/` и `GET /api/v1/assistant/conversations/{id}/messages/` показывают только свои диалоги. `POST .../{id}/messages/` принимает `text` и текущий `expected_version` из диалога. Нужны вход в сессию и CSRF. Ответ содержит текст, серверные `facts`, необязательный `suggested_draft` и новую версию. Числа берутся из каталога продуктов, серверного аннуитетного расчёта или сохранённой заявки, а предложение черновика **ничего не записывает**. Для создания заявки клиент подтверждает его через обычный API. Лимит отправки — 10 сообщений в минуту на пользователя; при двух процессах это приблизительное ограничение.
-
-Помесячной финансовой истории и сценарного прогноза пока нет. Савелий не обещает одобрение, не назначает условия, не запускает проверки и не принимает кредитных решений. Если второй модельный запрос не удался после получения серверных фактов, помощник возвращает проверенное краткое резюме этих фактов. Если ни одна модель не ответила до получения фактов, сообщение не сохраняется и API отвечает 503; основные операции кабинета продолжают работать. Первый запрос после запуска Ollama может занять несколько десятков секунд; перед демонстрацией отправьте пробный вопрос. Локально проверен реальный диалог с `qwen2.5:7b-instruct-q4_0` через Docker и HTTP API.
+Клиентские диалоги доступны через `/api/v1/assistant/conversations/`. Отправка сообщения требует session cookie, CSRF, текста и актуального `expected_version`. Ответ содержит текст, проверенные серверные `facts` и иногда `suggested_draft`. Предложение черновика ничего не записывает: клиент подтверждает его через обычную форму заявки. При выключенном ИИ кабинет и весь кредитный процесс работают без помощника. Подробнее о frontend и запуске: [docs/frontend.md](docs/frontend.md).
 
 ## Локальная разработка и проверки
 
@@ -107,4 +108,4 @@ HTML-отчёт: `htmlcov/index.html`. Порог покрытия — 95% по 
 
 ## Границы версии
 
-Реализован backend кредитного процесса и необязательный API Савелия. React-интерфейс и финансовые сценарии — следующие этапы. Скоринг, условия продуктов, подпись и выдача демонстрационные; реальных переводов, БКИ/ФНС, финансовых документов и платных API нет. Применены проектные навыки `alfa-credit-build`, `alfa-credit-guardrails`, `django-expert` и PostgreSQL-рекомендации. Юридическая проверка реального банковского сервиса не проводилась. Зависимости перечислены в [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Реализованы backend и React-интерфейс. Савелий — необязательный помощник с Django API и плавающим React-окном (`AI_ENABLED=false` и `VITE_AI_ASSISTANT_ENABLED=false` по умолчанию). Прогноз денежных потоков и стресс-тесты — следующий продуктовый этап; SLA и сложная приоритизация вне релиза. Скоринг, условия продуктов, подпись и выдача демонстрационные; реальных переводов, БКИ/ФНС, финансовых документов и платных API нет. Применены `alfa-credit-frontend`, `alfa-credit-build`, `alfa-credit-guardrails`, React- и Playwright-рекомендации; для backend — `django-expert` и PostgreSQL-рекомендации. Юридическая проверка реального банковского сервиса не проводилась. Зависимости перечислены в [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

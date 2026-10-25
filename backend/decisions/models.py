@@ -20,6 +20,7 @@ class Assessment(AppendOnlyModel):
     risk_level = models.CharField("Риск", max_length=8, choices=Risk)
     factors = models.JSONField("Факторы оценки (v1)", default=dict)
     rules_version = models.CharField("Версия скоринга", max_length=32)
+    checks_attempt = models.PositiveIntegerField("Использованная попытка проверок", default=1)
 
     class Meta:
         verbose_name = "Оценка риска"
@@ -27,7 +28,10 @@ class Assessment(AppendOnlyModel):
         constraints = [
             models.CheckConstraint(
                 condition=models.Q(score__lte=100), name="assessment_score_bounds"
-            )
+            ),
+            models.CheckConstraint(
+                condition=models.Q(checks_attempt__gte=1), name="assessment_attempt_positive"
+            ),
         ]
 
 

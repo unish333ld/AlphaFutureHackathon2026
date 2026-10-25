@@ -1,10 +1,20 @@
 from decimal import Decimal
 
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 from rest_framework.settings import api_settings
 
 from accounts.models import User
 from agreements.models import Agreement, Disbursement
+from api.contracts import (
+    CheckResultField,
+    EventDetailsField,
+    FactorsField,
+    InputSnapshotField,
+    ScheduleField,
+    TermsSnapshotField,
+)
+from applications.actions import ACTION_NAMES, REASON_CODES, available_actions, latest_revision
 from applications.models import (
     Application,
     ApplicationEvent,
@@ -40,6 +50,48 @@ class ErrorSerializer(serializers.Serializer):
     )
 
 
+class StaffQueueQuerySerializer(StrictSerializer):
+    status = serializers.ChoiceField(choices=Application.Status.choices, required=False)
+    assignment = serializers.ChoiceField(choices=["all", "free", "mine"], default="all")
+    risk_level = serializers.ChoiceField(
+        choices=["low", "medium", "high", "unassessed"], required=False
+    )
+    search = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    ordering = serializers.ChoiceField(
+        choices=[
+            prefix + field
+            for field in (
+                "created_at",
+                "updated_at",
+                "assigned_at",
+                "amount",
+                "term_months",
+                "number",
+            )
+            for prefix in ("", "-")
+        ],
+        default="-created_at",
+    )
+    page = serializers.IntegerField(min_value=1, required=False)
+
+
+class SpecialistSummarySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ["id", "username", "first_name", "last_name"]
+        read_only_fields = fields
+
+
+class AvailableActionSerializer(serializers.Serializer):
+    action = serializers.ChoiceField(choices=ACTION_NAMES)
+    allowed = serializers.BooleanField()
+    reason_code = serializers.ChoiceField(choices=REASON_CODES, allow_null=True)
+    target_id = serializers.UUIDField(
+        allow_null=True,
+        help_text="UUID заявки, предложения или договора для соответствующего действия. Подсказка не отменяет серверную проверку.",
+    )
+
+
 class MemberSerializer(serializers.ModelSerializer):
     class Meta:
         model = CompanyMember
@@ -59,7 +111,7 @@ class UserSerializer(serializers.ModelSerializer):
 class LoginRequestSerializer(StrictSerializer):
     username = serializers.CharField(max_length=150)
     password = serializers.CharField(
-        max_length=256, write_only=True, style={"input_type": "password"}
+        max_length=256, write_only=True, trim_whitespace=False, style={"input_type": "password"}
     )
 
 
@@ -198,6 +250,7 @@ class DisbursementSerializer(serializers.ModelSerializer):
 
 class AgreementSerializer(serializers.ModelSerializer):
     disbursement = DisbursementSerializer(read_only=True, allow_null=True)
+    terms_snapshot = TermsSnapshotField(read_only=True)
 
     class Meta:
         model = Agreement
@@ -218,6 +271,7 @@ class AgreementSerializer(serializers.ModelSerializer):
 
 class OfferSerializer(serializers.ModelSerializer):
     agreement = AgreementSerializer(read_only=True, allow_null=True)
+    schedule = ScheduleField(read_only=True)
     application_id = serializers.UUIDField(
         source="decision.assessment.revision.application_id", read_only=True
     )
@@ -251,6 +305,7 @@ class CreditDecisionSerializer(serializers.ModelSerializer):
         model = CreditDecision
         fields = [
             "id",
+            "assessment",
             "outcome",
             "reason_code",
             "explanation",
@@ -264,14 +319,27 @@ class CreditDecisionSerializer(serializers.ModelSerializer):
 
 class AssessmentSerializer(serializers.ModelSerializer):
     decision = CreditDecisionSerializer(read_only=True, allow_null=True)
+    factors = FactorsField(read_only=True)
 
     class Meta:
         model = Assessment
-        fields = ["id", "score", "risk_level", "factors", "rules_version", "created_at", "decision"]
+        fields = [
+            "id",
+            "revision",
+            "checks_attempt",
+            "score",
+            "risk_level",
+            "factors",
+            "rules_version",
+            "created_at",
+            "decision",
+        ]
         read_only_fields = fields
 
 
 class CheckSerializer(serializers.ModelSerializer):
+    result = CheckResultField(read_only=True)
+
     class Meta:
         model = CheckResult
         fields = ["id", "kind", "status", "attempt", "result", "source", "is_mock", "checked_at"]
@@ -293,6 +361,7 @@ class InformationRequestSerializer(serializers.ModelSerializer):
 
 
 class RevisionSerializer(serializers.ModelSerializer):
+    input_snapshot = InputSnapshotField(read_only=True)
     checks = CheckSerializer(many=True, read_only=True)
     assessment = AssessmentSerializer(read_only=True, allow_null=True)
     information_requests = InformationRequestSerializer(many=True, read_only=True)
@@ -341,13 +410,65 @@ class ApplicationListSerializer(serializers.ModelSerializer):
 
 class ApplicationSerializer(ApplicationListSerializer):
     revisions = RevisionSerializer(many=True, read_only=True)
+    assigned_to = SpecialistSummarySerializer(read_only=True, allow_null=True)
+    current_revision_id = serializers.SerializerMethodField()
+    available_actions = serializers.SerializerMethodField()
+
+    @extend_schema_field(serializers.UUIDField(allow_null=True))
+    def get_current_revision_id(self, obj):
+        revision = latest_revision(obj)
+        return revision.pk if revision else None
+
+    @extend_schema_field(AvailableActionSerializer(many=True))
+    def get_available_actions(self, obj):
+        request = self.context["request"]
+        return available_actions(obj, request.user)
 
     class Meta(ApplicationListSerializer.Meta):
-        fields = ApplicationListSerializer.Meta.fields + ["revisions"]
+        fields = ApplicationListSerializer.Meta.fields + [
+            "number",
+            "revisions",
+            "current_revision_id",
+            "assigned_to",
+            "assigned_at",
+            "status_changed_at",
+            "available_actions",
+        ]
+        read_only_fields = fields
+
+
+class StaffApplicationListSerializer(ApplicationListSerializer):
+    company_inn = serializers.CharField(source="company.inn", read_only=True)
+    current_revision_id = serializers.UUIDField(
+        source="queue_revision_id", read_only=True, allow_null=True
+    )
+    amount = serializers.DecimalField(
+        max_digits=18, decimal_places=2, read_only=True, allow_null=True
+    )
+    term_months = serializers.IntegerField(read_only=True, allow_null=True)
+    risk_level = serializers.ChoiceField(
+        choices=Assessment.Risk.choices, read_only=True, allow_null=True
+    )
+    assigned_to = SpecialistSummarySerializer(read_only=True, allow_null=True)
+
+    class Meta(ApplicationListSerializer.Meta):
+        fields = ApplicationListSerializer.Meta.fields + [
+            "number",
+            "company_inn",
+            "current_revision_id",
+            "amount",
+            "term_months",
+            "risk_level",
+            "assigned_to",
+            "assigned_at",
+            "status_changed_at",
+        ]
         read_only_fields = fields
 
 
 class EventSerializer(serializers.ModelSerializer):
+    details = EventDetailsField(read_only=True)
+
     class Meta:
         model = ApplicationEvent
         fields = ["id", "actor", "event_type", "from_status", "to_status", "details", "created_at"]
@@ -364,6 +485,6 @@ class PaymentRequestSerializer(StrictSerializer):
 
 class PaymentResponseSerializer(serializers.Serializer):
     monthly_payment = serializers.DecimalField(max_digits=18, decimal_places=2)
-    schedule = serializers.JSONField(
+    schedule = ScheduleField(
         help_text="График v1: месяц, платёж, основной долг, проценты, остаток; без комиссий."
     )

@@ -1,5 +1,19 @@
 # Инструкции проекта
 
+## Стек и текущий релиз
+
+Следовать [docs/stack.md](docs/stack.md): Python/Django/DRF, PostgreSQL; frontend React, TypeScript strict, Vite; Core Components Альфа-Банка; CSS Modules, Grid, Flexbox, медиазапросы; React Router, TanStack Query, React Hook Form/Zod. Авторизация — Django sessions, HttpOnly cookie и CSRF. API — drf-spectacular/OpenAPI/Swagger UI. Запуск — Docker Compose, Nginx для frontend и API proxy. Проверки — pytest/pytest-django, frontend — Vitest/Playwright. Инструкции запуска frontend: [docs/frontend.md](docs/frontend.md).
+
+Bootstrap и другие CSS/UI-фреймворки в основной интерфейс не добавлять; стандартный Django Admin и служебный HTML-вход сохранять. Не добавлять FastAPI, микросервисы, PyTorch и frontend-пакеты в Python-lock. Текущий релиз использует синтетические данные, локальные моки, условную подпись и выдачу; без прогноза денежных потоков. Необязательный Савелий работает через Django API и сменяемый OpenAI-совместимый LLM endpoint; кредитный путь не зависит от него. [Контракт интеграции](docs/frontend-integration.md). Сохранять пользовательский ввод при 409; не повторять значимые операции автоматически. Ключ моделируемой выдачи хранить до запроса в sessionStorage с областью user/agreement, повтор — только осознанно с тем же ключом после сверки сервера. Не хранить финансовые payload, пароли и session cookies в Web Storage.
+
+## Скиллы и RepoWise
+
+Скиллы из соседнего каталога `../skills/` установлены в `~/.agents/skills/`. Для разработки применять `alfa-credit-build` и `alfa-credit-guardrails`, затем профильные скиллы по задаче: Django, PostgreSQL, React/TypeScript, Playwright. Инструкции скиллов не заменяют актуальный код и правила проекта.
+
+При наличии `.repowise/` активно использовать локальный индекс: `get_overview` для знакомства, `get_context`/`search_codebase` для навигации, `get_risk` перед изменениями, `get_why` для архитектурных решений. Если MCP недоступен, использовать соответствующие CLI-команды `repowise context`, `repowise search`, `repowise risk --target`, `repowise why`. Перед анализом незакоммиченных изменений обновлять индекс: `repowise update --working-tree --index-only --no-agents`. При предупреждении об устаревших данных сверяться с исходниками. Индекс не заменяет тесты.
+
+RepoWise — отдельный инструмент разработки, не зависимость приложения. По умолчанию анализ локальный, телеметрия отключена, LLM и платные embedding API не включать без согласования. Не индексировать и не выводить секреты из `.env`; не обходить настройки приватности редактора.
+
 ## Сообщения коммитов
 
 Следовать [Conventional Commits Cheatsheet от qoomon](https://gist.github.com/qoomon/5dfcdf8eec66a051ecd85625518cfd13) по пожеланию владельца проекта.

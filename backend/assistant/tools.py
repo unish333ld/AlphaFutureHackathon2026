@@ -91,9 +91,21 @@ TOOL_DEFINITIONS = [
 
 
 def _product(data):
-    product = get_object_or_404(CreditProduct, code=data["product_code"], active=True)
+    product = CreditProduct.objects.filter(code=data["product_code"], active=True).first()
+    if product is None:
+        return None
     validate_terms(data, product)
     return product
+
+
+def _unknown_product():
+    return {
+        "error": "unknown_product_code",
+        "message": "Не удалось найти выбранный кредитный продукт. Сначала уточните доступные продукты.",
+        "available_products": list(
+            CreditProduct.objects.filter(active=True).order_by("code").values("code", "name")
+        ),
+    }
 
 
 def run_tool(user, conversation, name, arguments):
@@ -138,6 +150,8 @@ def run_tool(user, conversation, name, arguments):
         data.is_valid(raise_exception=True)
         values = data.validated_data
         product = _product(values)
+        if product is None:
+            return _unknown_product()
         monthly_payment, schedule = payment_schedule(
             values["amount"], product.annual_rate, values["term_months"]
         )
@@ -213,6 +227,8 @@ def run_tool(user, conversation, name, arguments):
         data.is_valid(raise_exception=True)
         values = data.validated_data
         product = _product(values)
+        if product is None:
+            return _unknown_product()
         return {
             "company": str(conversation.company_id),
             "product": str(product.id),

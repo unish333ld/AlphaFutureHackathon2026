@@ -1,0 +1,134 @@
+.filters {
+  display: grid;
+  grid-template-columns: minmax(200px, 2fr) repeat(3, minmax(130px, 1fr)) auto;
+  gap: 14px;
+  align-items: end;
+  margin: 24px 0;
+}
+.tableWrap {
+  max-width: 100%;
+  overflow: auto;
+}
+.table {
+  font-size: 13px;
+  line-height: 1.5;
+  min-width: 860px;
+}
+.table th {
+  font-size: 12px;
+  padding: 0 14px 18px;
+}
+.table td {
+  padding: 20px 14px;
+  vertical-align: top;
+}
+.table tr:last-child td {
+  border-bottom: 0;
+}
+.number {
+  color: #202329;
+  font-weight: 700;
+  display: block;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.number:hover {
+  color: #bb281e;
+}
+.company {
+  display: block;
+  margin-top: 8px;
+  font-size: 13px;
+  max-width: 220px;
+}
+.small {
+  display: block;
+  color: #5b6470;
+  font-size: 12px;
+  margin-top: 6px;
+}
+.risk {
+  display: inline-block;
+  padding: 5px 8px;
+  border-radius: 7px;
+  font-size: 12px;
+  background: #f1f2f5;
+  color: #626b78;
+  white-space: nowrap;
+}
+.low {
+  background: #e8f5ee;
+  color: #2b6843;
+}
+.medium {
+  background: #fff2cf;
+  color: #8b651d;
+}
+.high {
+  background: #fdebeb;
+  color: #b4312a;
+}
+.caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.mobileRows {
+  display: none;
+}
+.mobileCard {
+  display: block;
+  padding: 20px 0;
+  text-decoration: none !important;
+  border-bottom: 1px solid #eceef1;
+}
+.mobileCard:last-child {
+  border-bottom: 0;
+}
+.mobileCard h3 {
+  margin: 12px 0 4px;
+}
+.mobileCard p {
+  margin: 6px 0 12px;
+}
+.mobileCard .number {
+  font-size: 12px;
+}
+@media (max-width: 1200px) {
+  .filters {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .filters > div:first-child {
+    grid-column: 1/-1;
+  }
+  .filters > button {
+    grid-column: 3;
+  }
+}
+@media (max-width: 850px) {
+  .tableWrap {
+    display: none;
+  }
+  .mobileRows {
+    display: block;
+  }
+  .filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .filters > button {
+    grid-column: auto;
+  }
+}
+@media (max-width: 480px) {
+  .filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .filters > div:first-child {
+    grid-column: auto;
+  }
+  .filters > button {
+    width: 100%;
+  }
+}

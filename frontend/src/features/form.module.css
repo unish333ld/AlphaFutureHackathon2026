@@ -1,0 +1,73 @@
+.steps {
+  list-style: none;
+  display: flex;
+  gap: 26px;
+  padding: 0;
+  margin: 0 0 28px;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: #5b6470;
+}
+.steps li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.steps li span {
+  background: #e8ebef;
+  border-radius: 50%;
+  width: 25px;
+  height: 25px;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+}
+.steps li[aria-current="step"] {
+  color: #22262b;
+  font-weight: 600;
+}
+.steps li[aria-current="step"] span {
+  background: #ef3124;
+  color: white;
+}
+.formFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  background: #fff;
+  border: 1px solid #e7e9ec;
+  border-radius: 16px;
+  padding: 20px 24px;
+  margin-top: 4px;
+}
+.formFooter > div {
+  justify-content: flex-end;
+}
+@media (max-width: 600px) {
+  .steps {
+    gap: 10px;
+    font-size: 10px;
+  }
+  .steps li {
+    gap: 6px;
+  }
+  .steps li span {
+    width: 21px;
+    height: 21px;
+  }
+  .formFooter {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 20px;
+    position: static;
+  }
+  .formFooter > div {
+    display: grid;
+    gap: 10px;
+  }
+  .formFooter button {
+    width: 100%;
+  }
+}

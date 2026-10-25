@@ -1,6 +1,6 @@
 # Сторонние компоненты
 
-Прототип создан для хакатонного кейса; это не официальный банковский сервис. Синтетические данные, локальные моки и демонстрационная политика описаны в `docs/architecture.md`. Банковские API, реальные финансовые документы и дизайн-система в текущий backend не включены. ИИ-модель не входит в Docker-образ и запускается отдельно только при включении помощника.
+Прототип создан для хакатонного кейса; это не официальный банковский сервис. Синтетические данные, локальные моки и демонстрационная политика описаны в `docs/architecture.md`. Банковские API и реальные финансовые документы не включены. Необязательный помощник вызывает внешний или локальный OpenAI-совместимый endpoint; веса LLM в репозиторий не входят.
 
 Версии Python-пакетов закреплены в `backend/requirements.lock`; дополнительные инструменты покрытия тестов — в `backend/requirements-test.lock`. Лицензии проверены по метаданным установленных дистрибутивов. Полные уведомления/тексты сохраняются в `*.dist-info/licenses`, `METADATA` и исходных пакетах, включая Docker-образ.
 
@@ -24,10 +24,26 @@
 | uritemplate | BSD-3-Clause OR Apache-2.0 |
 | Базовые образы python и postgres | Содержат системные компоненты со своими лицензиями и уведомлениями |
 
-Необязательный кандидат для демонстрации Савелия — `Qwen/Qwen2.5-7B-Instruct` с открытыми весами (Apache-2.0), например квантизация `qwen2.5:7b-instruct-q4_0` для Ollama. Перед финальной поставкой нужно закрепить конкретный тег/хеш модели, источник квантизации и воспроизвести запуск на целевой машине. Ни веса, ни сервер Ollama в этот репозиторий не включены. Источники: [карточка модели Qwen](https://huggingface.co/Qwen/Qwen2.5-7B-Instruct), [каталог Ollama](https://ollama.com/library/qwen2.5:7b-instruct-q4_0).
-
-Пример основного внешнего маршрута — открытовесная [Gemma 4 26B A4B IT](https://huggingface.co/google/gemma-4-26B-A4B-it) (Apache-2.0) через бесплатный `google/gemma-4-26b-a4b-it:free` в OpenRouter. Пример облачного резерва — открытовесная [Nemotron 3.5 Lightning 30B A3B](https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16) (OpenMDW-1.1) через `nvidia/nemotron-3.5-lightning:free`. Веса не входят в проект; тарифы, доступность и правила обработки запросов зависят от endpoint. [Бесплатный endpoint NVIDIA](https://openrouter.ai/nvidia/nemotron-3.5-lightning:free) уведомляет о записи запросов, поэтому ему передаются только синтетические демо-данные. Перед сдачей следует повторно проверить выбранные ID, лицензии и условия endpoint.
-
 Источники: [Django](https://www.djangoproject.com/), [DRF](https://github.com/encode/django-rest-framework), [drf-spectacular](https://github.com/tfranzel/drf-spectacular), [sidecar](https://github.com/tfranzel/drf-spectacular-sidecar), [PostgreSQL](https://www.postgresql.org/), [psycopg](https://www.psycopg.org/), [Gunicorn](https://gunicorn.org/), [WhiteNoise](https://whitenoise.readthedocs.io/), остальные пакеты — соответствующие PyPI-проекты из lock-файла.
 
 Навыки в локальной игнорируемой папке `skills/` используются при разработке и исключены из Docker-контекста; их лицензии остаются в исходных репозиториях. Скоринг, seeds и адаптеры написаны для этого проекта. В runtime не включён код Repowise.
+
+## Frontend
+
+Дизайн-система включена только в frontend. Версии зафиксированы в `frontend/package-lock.json`; исходные LICENSE/NOTICE сохраняются в npm-пакетах. Шрифты и изображения с внешних CDN не загружаются; используются системные шрифты. PNG из навыка — референсы, не runtime-ресурсы.
+
+| Компонент | Лицензия по метаданным пакета |
+|---|---|
+| React, React DOM, React Router, TanStack Query | MIT |
+| Alfa Core Components, config, stack-context, icons-logotype | MIT |
+| React Hook Form, resolvers, Zod | MIT |
+| Vite, Vitest, Prettier, openapi-typescript | MIT |
+| TypeScript, Playwright | Apache-2.0 |
+| axe-core / @axe-core/playwright (тестирование) | MPL-2.0 |
+| Nginx | BSD-2-Clause |
+
+Список включает основные прямые зависимости; транзитивные лицензии не заменяются этой сводкой. Полный npm tree и тексты лицензий доступны в установленном `node_modules`. Это не разрешение на использование бренда банка вне хакатонного прототипа.
+
+## Необязательные модели Савелия
+
+Для локального демо используется кандидат `Qwen/Qwen2.5-7B-Instruct` с открытыми весами (Apache-2.0), например `qwen2.5:7b-instruct-q4_0` в Ollama. В примере `.env.example` также указаны открытовесные `google/gemma-4-26b-a4b-it:free` (Apache-2.0) и `nvidia/nemotron-3.5-lightning:free` (OpenMDW-1.1) через OpenRouter. Точный тег/хеш, доступность бесплатного endpoint, условия обработки запросов и лицензию выбранной модели следует повторно проверить перед демонстрацией. Передавать внешнему endpoint только синтетические данные. Источники: [Qwen](https://huggingface.co/Qwen/Qwen2.5-7B-Instruct), [Gemma](https://huggingface.co/google/gemma-4-26B-A4B-it), [Nemotron](https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16).

@@ -10,7 +10,7 @@ from rest_framework.exceptions import ValidationError
 
 from agreements.models import Agreement, Disbursement
 from applications.models import Application
-from applications.services import current_revision, locked_application, transition
+from applications.services import current_revision, locked_application, require_assignee, transition
 from common.access import require_member, require_specialist
 from common.exceptions import Conflict
 from offers.models import Offer
@@ -85,6 +85,7 @@ def sign_agreement(user, agreement_id, version, document_hash):
         app.status != Application.Status.ACCEPTED
         or offer.status != Offer.Status.ACCEPTED
         or agreement.signed_at
+        or offer.decision.assessment.revision_id != current_revision(app).id
     ):
         raise Conflict("Договор недоступен для условного подписания.")
     if not offer.sign_before or offer.sign_before <= timezone.now():
@@ -117,10 +118,13 @@ def disburse(user, agreement_id, version, idempotency_key):
             raise Conflict("Idempotency-Key уже использован с другим договором.")
         return existing
     if app.lock_version != version:
-        raise Conflict("Устаревший lock_version.")
+        raise Conflict("Устаревший lock_version.", code="stale_version")
+    require_assignee(user, app)
     agreement.refresh_from_db()
     if app.status != Application.Status.SIGNED or not agreement.signed_at:
         raise Conflict("Выдача доступна только по условно подписанному договору.")
+    if agreement.offer.decision.assessment.revision_id != current_revision(app).id:
+        raise Conflict("Договор относится к другой ревизии.", code="assessment_outdated")
     if agreement.document_hash != terms_hash(agreement.terms_snapshot):
         raise Conflict("Целостность условий договора нарушена.")
     if str(agreement.offer.amount) != agreement.terms_snapshot.get("amount"):

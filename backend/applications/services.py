@@ -36,6 +36,10 @@ ALLOWED_TRANSITIONS = {
     "accepted": {"signed", "expired"},
     "signed": {"issued"},
 }
+ASSIGNABLE_STATUSES = frozenset(
+    {"checking", "review", "needs_info", "offered", "accepted", "signed"}
+)
+TERMINAL_STATUSES = frozenset({"issued", "rejected", "declined", "expired"})
 REVISION_FIELDS = (
     "amount",
     "term_months",
@@ -49,7 +53,7 @@ REVISION_FIELDS = (
 def locked_application(application_id, version):
     app = get_object_or_404(Application.objects.select_for_update(), pk=application_id)
     if app.lock_version != version:
-        raise Conflict("Устаревший lock_version. Загрузите заявку заново.")
+        raise Conflict("Устаревший lock_version. Загрузите заявку заново.", code="stale_version")
     return app
 
 
@@ -58,8 +62,23 @@ def transition(app, status, actor, event_type, details=None):
     if status != previous and status not in ALLOWED_TRANSITIONS.get(previous, set()):
         raise Conflict(f"Переход {previous} → {status} недоступен.")
     app.status = status
+    if status != previous:
+        app.status_changed_at = timezone.now()
+    released = app.assigned_to_id if status in TERMINAL_STATUSES else None
+    if released:
+        app.assigned_to = None
+        app.assigned_at = None
     app.lock_version += 1
-    app.save(update_fields=["status", "lock_version", "updated_at"])
+    app.save(
+        update_fields=[
+            "status",
+            "lock_version",
+            "updated_at",
+            "status_changed_at",
+            "assigned_to",
+            "assigned_at",
+        ]
+    )
     ApplicationEvent.objects.create(
         application=app,
         actor=actor,
@@ -68,6 +87,88 @@ def transition(app, status, actor, event_type, details=None):
         to_status=status,
         details={"schema_version": 1, **(details or {})},
     )
+    if released:
+        ApplicationEvent.objects.create(
+            application=app,
+            actor=actor,
+            event_type="assignment_released",
+            from_status=status,
+            to_status=status,
+            details={"schema_version": 1, "assigned_to": str(released), "reason": "terminal_state"},
+        )
+
+
+def require_assignee(user, app):
+    require_specialist(user)
+    if app.assigned_to_id is None:
+        raise Conflict("Сначала возьмите заявку в работу.", code="assignment_required")
+    if app.assigned_to_id != user.pk:
+        raise Conflict("Заявка занята другим специалистом.", code="assigned_to_other")
+
+
+@transaction.atomic
+def claim_application(user, application_id, version):
+    require_specialist(user)
+    app = locked_application(application_id, version)
+    if app.status not in ASSIGNABLE_STATUSES:
+        raise Conflict("Назначение недоступно в текущем состоянии.", code="invalid_state")
+    if app.assigned_to_id == user.pk:
+        return app
+    if app.assigned_to_id:
+        raise Conflict("Заявка занята другим специалистом.", code="assigned_to_other")
+    app.assigned_to = user
+    app.assigned_at = timezone.now()
+    transition(app, app.status, user, "assignment_claimed", {"assigned_to": str(user.pk)})
+    return app
+
+
+@transaction.atomic
+def release_application(user, application_id, version):
+    require_specialist(user)
+    app = locked_application(application_id, version)
+    require_assignee(user, app)
+    app.assigned_to = None
+    app.assigned_at = None
+    transition(
+        app,
+        app.status,
+        user,
+        "assignment_released",
+        {"assigned_to": str(user.pk), "reason": "manual"},
+    )
+    return app
+
+
+def decision_blocker(revision):
+    """The same readiness rule powers hints and the locked decision boundary."""
+    if revision is None or revision.submitted_at is None:
+        return "no_current_revision"
+    checks = list(revision.checks.all())
+    attempt = max((check.attempt for check in checks), default=0)
+    latest = [check for check in checks if check.attempt == attempt]
+    if any(check.status == CheckResult.Status.ERROR for check in latest):
+        return "technical_error"
+    if any(check.status == CheckResult.Status.MISSING for check in latest):
+        return "needs_information"
+    if {check.kind for check in latest} != set(CheckResult.Kind.values):
+        return "checks_incomplete"
+    if any(
+        check.status not in {CheckResult.Status.PASSED, CheckResult.Status.FAILED}
+        for check in latest
+    ):
+        return "checks_incomplete"
+    assessment = getattr(revision, "assessment", None)
+    if assessment is None:
+        return "assessment_unavailable"
+    if (
+        assessment.revision_id != revision.pk
+        or assessment.checks_attempt != attempt
+        or any(check.checked_at > assessment.created_at for check in latest)
+    ):
+        return "assessment_outdated"
+    if getattr(assessment, "decision", None) is not None:
+        return "already_completed"
+    return None
 
 
 def current_revision(app):
@@ -180,7 +281,7 @@ def _run_checks(app, revision, actor):
         )
         transition(app, Application.Status.NEEDS_INFO, actor, "information_requested")
         return
-    Assessment.objects.create(revision=revision, **assess(revision, checks))
+    Assessment.objects.create(revision=revision, checks_attempt=attempt, **assess(revision, checks))
     transition(app, Application.Status.REVIEW, actor, "checks_completed", {"attempt": attempt})
 
 
@@ -211,12 +312,16 @@ def submit_application(user, application_id, version):
 def retry_checks(user, application_id, version):
     app = locked_application(application_id, version)
     if user.is_credit_specialist:
-        require_specialist(user)
+        require_assignee(user, app)
     else:
         require_member(user, app.company_id, "can_submit")
     if app.status != Application.Status.CHECKING:
         raise Conflict("Повтор доступен только после технической ошибки проверки.")
-    _run_checks(app, current_revision(app), user)
+    revision = current_revision(app)
+    attempt = revision.checks.aggregate(value=Max("attempt"))["value"]
+    if not revision.checks.filter(attempt=attempt, status=CheckResult.Status.ERROR).exists():
+        raise Conflict("Нет технической ошибки для повтора.", code="checks_incomplete")
+    _run_checks(app, revision, user)
     return app
 
 
@@ -226,6 +331,7 @@ def request_information(user, application_id, version, question):
     app = locked_application(application_id, version)
     if app.status not in {Application.Status.REVIEW, Application.Status.CHECKING}:
         raise Conflict("Запрос уточнения доступен во время проверки и рассмотрения.")
+    require_assignee(user, app)
     InformationRequest.objects.create(
         revision=current_revision(app), requested_by=user, question=question
     )
@@ -270,7 +376,11 @@ def make_decision(user, application_id, version):
     app = locked_application(application_id, version)
     if app.status != Application.Status.REVIEW:
         raise Conflict("Решение доступно только после успешного завершения проверок.")
+    require_assignee(user, app)
     revision = current_revision(app)
+    blocker = decision_blocker(revision)
+    if blocker:
+        raise Conflict("Оценка или проверки текущей ревизии недоступны для решения.", code=blocker)
     assessment = revision.assessment
     outcome, reason, explanation, amount = decide(assessment)
     decision = CreditDecision.objects.create(

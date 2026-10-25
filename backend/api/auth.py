@@ -39,7 +39,7 @@ class CsrfView(APIView):
     permission_classes = [AllowAny]
 
     @extend_schema(
-        tags=["Сессия"], responses=CsrfSerializer, summary="Получить CSRF-токен и cookie"
+        tags=["Сессия"], responses=CsrfSerializer, auth=[], summary="Получить CSRF-токен и cookie"
     )
     def get(self, request):
         return Response({"csrf_token": get_token(request._request)})
@@ -57,7 +57,7 @@ class SessionLoginView(APIView):
         responses={200: LoginResponseSerializer},
         auth=[],
         summary="Войти: session cookie + CSRF",
-        description="Сначала GET /session/csrf/, затем передайте X-CSRFToken. Вход вращает токен; используйте новый из ответа.",
+        description="1. GET /api/v1/session/csrf/ с сохранением cookies. 2. POST сюда с X-CSRFToken и credentials: include. 3. Вход вращает CSRF: используйте csrf_token из этого ответа для следующих изменений. Session cookie HttpOnly, не читается JavaScript. 4. GET /api/v1/me/ возвращает роль и членства/can_submit/can_sign. 5. POST /api/v1/session/logout/ с новым CSRF завершает серверную сессию. Неверные credentials или CSRF — 403, лимит — 429. /api/session/login/ — отдельная служебная HTML-форма для Swagger/Admin, не версия JSON login. Frontend и API проектируются под один origin; Nginx проксирует /api/.",
     )
     def post(self, request):
         serializer = LoginRequestSerializer(data=request.data)

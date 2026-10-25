@@ -119,6 +119,38 @@ def test_payment_fact_is_computed_by_server_without_credit_decision(demo, api, s
     )
 
 
+def test_unknown_product_code_returns_guidance_without_draft(demo, api, settings):
+    settings.AI_ENABLED = True
+    app = demo["applications"]["approval"]
+    conversation_id = new_conversation(api, demo["client"], app)
+    first = {
+        "content": None,
+        "tool_calls": [
+            {
+                "id": "unknown_1",
+                "function": {
+                    "name": "calculate_payment",
+                    "arguments": json.dumps(
+                        {"product_code": "made-up", "amount": "1000000.00", "term_months": 24}
+                    ),
+                },
+            }
+        ],
+    }
+    with patch("assistant.services.chat", side_effect=[first, {"content": "Уточните продукт."}]):
+        response = endpoint(
+            api,
+            demo["client"],
+            "post",
+            f"{conversation_id}/messages/",
+            {"text": "Сколько платить?", "expected_version": 0},
+        )
+    assert response.status_code == 200, response.data
+    assert response.data["message"]["facts"][0]["data"]["error"] == "unknown_product_code"
+    assert response.data["message"]["suggested_draft"] == {}
+    assert Conversation.objects.get(pk=conversation_id).version == 1
+
+
 def test_invalid_tool_arguments_do_not_persist_or_change_application(demo, api, settings):
     settings.AI_ENABLED = True
     app = demo["applications"]["approval"]

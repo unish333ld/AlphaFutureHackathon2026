@@ -1,5 +1,7 @@
 # Демонстрация backend
 
+[Стек и границы](stack.md); [контракт frontend](frontend-integration.md). Новые миграции сохраняют существующие данные; перед банковскими действиями требуется claim.
+
 Проверенный Compose-проект: `alfa-credit-demo`. На этой машине он запущен на порту **18000**. Обычный запуск без `WEB_PORT` использует порт 8000.
 
 ## Запустить
@@ -27,7 +29,7 @@ WEB_PORT=18000 docker compose -p alfa-credit-demo ps
 WEB_PORT=18000 docker compose -p alfa-credit-demo exec -T web python /app/scripts/demo_smoke.py
 ```
 
-Проверка выполняет настоящие HTTP-запросы к Gunicorn: Swagger/ReDoc и пять static-ресурсов, OpenAPI, cookie/CSRF, запрет подмены статуса и неверного JSON, пять кредитных сценариев, подпись и выдачу, идемпотентный повтор и изоляцию чужой компании.
+Проверка выполняет настоящие HTTP-запросы к Gunicorn: Swagger/ReDoc и пять static-ресурсов, OpenAPI, cookie/CSRF, запрет подмены статуса и неверного JSON, очередь свободных/моих, claim/release, подсказки действий, пять кредитных сценариев, подпись и выдачу, идемпотентный повтор и изоляцию чужой компании.
 
 Она добавляет **пять новых синтетических заявок и одну моделируемую выдачу**. Исходные пять черновиков остаются доступными для ручной демонстрации. Успех — JSON с `status: ok` и UUID созданных заявок. Повторный запуск создаёт новый набор записей.
 
@@ -37,10 +39,10 @@ WEB_PORT=18000 docker compose -p alfa-credit-demo exec -T web python /app/script
 
 1. Войдите как `client` через страницу входа. Она перенаправит в Swagger с обновлённым CSRF-токеном. `GET /api/v1/applications/?status=draft`: выберите компанию `Демо · Рост`, сохраните UUID заявки и `lock_version`.
 2. `POST /applications/{id}/submit/` с текущим `lock_version`. Ожидаемое состояние — `review`. Все проверки и оценка доступны в `revisions` карточки.
-3. В отдельном профиле браузера или приватном окне войдите как `specialist`. `GET /staff/applications/{id}/`, затем `POST /staff/applications/{id}/decide/` с актуальной версией. Ожидаются `offered`, решение `approved` и предложение.
+3. В отдельном профиле браузера или приватном окне войдите как `specialist`. `GET /staff/applications/{id}/`, затем `POST /staff/applications/{id}/claim/` с актуальной версией. Из ответа возьмите новый lock_version и вызовите `/decide/`. Ожидаются offered, approved и предложение. Кнопки и причины недоступности описаны в available_actions; свободные/мои — `GET /staff/applications/?assignment=free` / `mine`.
 4. Как клиент: `GET /applications/{id}/`, затем `POST /offers/{id}/accept/`. В ответе — договор и `document_hash`.
 5. Как клиент: `POST /agreements/{id}/sign/` с актуальным `lock_version`, принятым `document_hash` и `confirm_simulation=true`. После подписи загрузите карточку заявки заново, чтобы получить новую версию.
-6. Как специалист: `POST /agreements/{id}/disburse/` с новой версией и любым UUID в заголовке `Idempotency-Key`. Выдача имеет `is_simulated=true`; заявка переходит в `issued`.
+6. Как назначенный специалист: `POST /agreements/{id}/disburse/` с новой версией и любым UUID в заголовке `Idempotency-Key`. Выдача имеет is_simulated=true; заявка переходит в issued и освобождает назначение.
 7. Повторите последний запрос с тем же ключом: ответ содержит ту же выдачу. Войдите как `outsider`: чужая заявка недоступна.
 
 Тело действия с версией:

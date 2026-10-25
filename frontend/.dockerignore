@@ -1,0 +1,13 @@
+node_modules
+dist
+test-results
+playwright-report
+test-results-linux
+playwright-report-linux
+test-results-*
+playwright-report-*
+.auth
+.env
+.env.*
+*.tsbuildinfo
+tests

@@ -45,6 +45,12 @@ def _safe_fact_summary(facts):
     summaries = []
     for fact in facts:
         source, data = fact["source"], fact["data"]
+        if data.get("error") == "unknown_product_code":
+            summaries.append(
+                "Не удалось найти выбранный кредитный продукт. "
+                "Уточните доступные продукты и выберите один из них."
+            )
+            continue
         if source == "list_credit_products":
             names = [product["name"] for product in data["products"]]
             summaries.append(
@@ -133,7 +139,7 @@ def _answer(user, conversation, text):
                     "Не удалось проверить запрос модели. Попробуйте ещё раз."
                 ) from exc
             facts.append({"source": name, "data": result})
-            if name == "suggest_application_draft":
+            if name == "suggest_application_draft" and result.get("requires_user_confirmation"):
                 suggested_draft = result
             messages.append(
                 {
