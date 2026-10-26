@@ -6,7 +6,11 @@ Full-stack хакатонный прототип: Django 5.2 LTS, Django REST Fr
 
 Для frontend: [OpenAPI](docs/openapi.yaml) и [экран сотрудника → API, назначения, действия, ошибки и сессии](docs/frontend-integration.md).
 
+Договоры: динамический приватный PDF (WeasyPrint, локальные кириллические шрифты), отдельный SHA-256 PDF, серверное демо-подтверждение одноразовым кодом, отдельная копия с отметкой и выдача назначенным специалистом. Телефон/SMS/ИИ не нужны. [Процесс, хранение и запуск](docs/agreements.md), [независимые проверки и дефекты](docs/qa-product-research.md). Для симуляции нужны `DEMO_MODE=true` и `DEMO_SIGNATURE_ENABLED=true` (пример `.env.example`).
+
 Дополнительный [QA-отчёт: вход, сохранение ввода и браузерная регрессия](docs/qa-auth-verification.md).
+
+Продуктовые улучшения: серверная стоимость кредита, сравнение встречных условий, чек-лист данных и паспорт перед подписью. Новый демо-каталог использует публичные диапазоны бизнес-кредита; 27% годовых — учебное допущение. Источники, версии, миграции и сценарий защиты — [docs/product-research.md](docs/product-research.md). Эти функции работают без ИИ. Оценка риска и встречные условия демонстрируют прозрачную учебную политику на синтетических данных; внутренние модели Альфа-Банка и реальные БКИ не используются.
 
 ## Запуск через Docker
 
@@ -59,7 +63,7 @@ docker compose logs -f web
 2. Вызовите `POST /applications/{id}/submit/` с текущим `lock_version`. Проверки синхронные и локальные; стандартная заявка перейдёт в `review`.
 3. Войдите как `specialist`. Сначала `POST /staff/applications/{id}/claim/` с lock_version, затем `POST /staff/applications/{id}/decide/` с версией из claim. Серверная политика создаст предложение либо отказ. Освободить свою заявку: `/release/`. Очередь «мои»: `GET /staff/applications/?assignment=mine`, свободные — `assignment=free`.
 4. Как `client`: `POST /offers/{id}/accept/`. В ответе появится демо-договор с зафиксированными условиями и `document_hash`.
-5. `POST /agreements/{id}/sign/`: `lock_version`, `document_hash`, `confirm_simulation=true`.
+5. Как уполномоченный `client`: `POST /agreements/{id}/generate-document/` с `lock_version` и `document_hash`; открыть/скачать `GET /agreements/{id}/pdf/`. После явного ознакомления — `POST /agreements/{id}/signature-attempt/` с актуальной версией, обоими хешами, `document_id`, `acknowledged=true`, `confirm_simulation=true`. Затем `POST /agreements/{id}/sign/` с теми же версией/хешами/документом, `attempt_id`, полученным `code` и `confirm_simulation=true`. Это только демо-подпись, не выдача. Hash-only запрос отклоняется. Полные JSON-примеры — [docs/demo.http](docs/demo.http).
 6. Как назначенный `specialist`: `POST /agreements/{id}/disburse/` с новой версией и UUID в заголовке `Idempotency-Key`. Повтор того же ключа и договора вернёт ту же выдачу. Клиент видит результат в карточке и `/disbursements/`. Завершение автоматически снимает назначение.
 
 Версию берите из последнего `GET /applications/{id}/`: одно действие может сохранить несколько переходов. Мутирующие действия принимают только разрешённые поля; статус, риск, ставку и банковское решение назначает сервер.
@@ -74,7 +78,7 @@ docker compose logs -f web
 
 ## Локальная разработка и проверки
 
-Требуются Python 3.14 и PostgreSQL 18. Создайте отдельную БД и пользователя, настройте `DB_*` в `.env`. Для создания тестовой БД пользователь должен иметь `CREATEDB`; при публичном запуске нужны отдельные ограниченные полномочия.
+Требуются Python 3.14 и PostgreSQL 18. Для PDF также нужны системные Pango/HarfBuzz и локальные DejaVu Serif; они уже включены в Docker. Native-подготовка и `PDF_FONT_DIR` — [docs/agreements.md](docs/agreements.md). Создайте отдельную БД и пользователя, настройте `DB_*` в `.env`. Для создания тестовой БД пользователь должен иметь `CREATEDB`; при публичном запуске нужны отдельные ограниченные полномочия.
 
 ```sh
 python3 -m venv .venv
@@ -104,7 +108,7 @@ python3 -m venv .venv
 
 HTML-отчёт: `htmlcov/index.html`. Порог покрытия — 95% по общей метрике строк и ветвей; более низкое значение завершает прогон ошибкой. Сгенерированные отчёты игнорируются Git. Считается код backend, включая API, сервисы, модели, Admin, настройки и команды; исключены сами тесты, миграции и точки запуска `manage.py`/`wsgi.py`. Тестовая БД создаётся из миграций и удаляется после прогона. HTTP-тест запускает временный локальный сервер; тесты гонок используют независимые PostgreSQL-соединения. Результаты и найденный дефект: [docs/verification.md](docs/verification.md).
 
-В контейнере базовый набор: `docker compose exec web pytest -c /app/pyproject.toml`. Инструменты покрытия устанавливаются отдельно из `requirements-test.lock`. Истечение предложений обрабатывается при чтении карточки/предложения и командой `python manage.py expire_offers`. Новые данные после рассмотрения отправляются через `/revise/`, ответ на уточнение — через `/provide-information/`. Seeds идемпотентны. `seed_demo --reset-passwords` обновляет пароли только четырёх демо-пользователей.
+В контейнере базовый набор: `docker compose exec web pytest -c /app/pyproject.toml`. Инструменты покрытия устанавливаются отдельно из `requirements-test.lock`; `coverage.patch=subprocess` учитывает настоящий PDF-worker, а не исключает его. Для безопасной полной проверки используйте отдельный Compose project и временный тестовый venv по [docs/qa-product-research.md](docs/qa-product-research.md), не пользовательскую демо-базу. Истечение предложений обрабатывается при чтении карточки/предложения и командой `python manage.py expire_offers`. Новые данные после рассмотрения отправляются через `/revise/`, ответ на уточнение — через `/provide-information/`. Seeds идемпотентны. `seed_demo --reset-passwords` обновляет пароли только четырёх демо-пользователей.
 
 ## Границы версии
 

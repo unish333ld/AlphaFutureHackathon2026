@@ -38,6 +38,26 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/agreements/{id}/cancel-signature/": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Отменить собственную ещё не использованную попытку
+     * @description Отмена не откатывает уже сохранённую подпись. USED даёт 409: сначала перечитайте договор.
+     */
+    post: operations["v1_agreements_cancel_signature_create"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/agreements/{id}/disburse/": {
     parameters: {
       query?: never;
@@ -58,6 +78,46 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/agreements/{id}/generate-document/": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Сформировать неизменяемый исходный PDF
+     * @description Только can_sign. Повтор возвращает тот же артефакт и байты. Стороны фиксируются для этой версии. document_hash — канонические условия; pdf_sha256 — отдельный хеш байтов. Рендеринг вне транзакции; при изменении lock_version — 409. Нет подписи и выдачи.
+     */
+    post: operations["v1_agreements_generate_document_create"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/agreements/{id}/pdf/": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Открыть или скачать сохранённый приватный PDF
+     * @description Авторизованный company scope; специалист может читать доступный ему договор. Повтор отдаёт те же сохранённые байты. Cache-Control: private, no-store; Vary: Cookie. Публичного media URL нет. Несформированный документ — 404.
+     */
+    get: operations["v1_agreements_pdf_retrieve"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/agreements/{id}/sign/": {
     parameters: {
       query?: never;
@@ -69,9 +129,49 @@ export interface paths {
     put?: never;
     /**
      * Условно подписать принятую версию договора
-     * @description Требует can_sign, document_hash и confirm_simulation=true; назначение специалиста не ограничивает клиента. Срок подписи — sign_before. Юридически значимая электронная подпись не выполняется. После успеха GET /api/v1/applications/{application_id}/ возвращает новый lock_version; application_id есть у предложения.
+     * @description Единственный маршрут подписи: can_sign, актуальные lock_version/document_hash, document_id/pdf_sha256 просмотренного PDF, pending attempt_id, одноразовый code и confirm_simulation=true. Старый hash-only запрос больше не подписывает (400). Ошибки кода учитываются, после пяти попытка блокируется. Код не является ЭП/SMS; назначение не ограничивает клиента. После успеха перечитайте карточку: signed, новый lock_version, но ещё не issued. Копия с отметкой создаётся отдельным signed-document, её ошибка не повторяет подпись.
      */
     post: operations["v1_agreements_sign_create"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/agreements/{id}/signature-attempt/": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Начать демонстрационное подтверждение кодом
+     * @description Только can_sign после явного ознакомления с конкретным PDF. Срок 2 минуты, до 5 проверок, до 10 новых попыток в час на участника и договор. Повтор открытия возвращает допустимую pending-попытку; устаревшая отменяется. Код возвращается браузеру только при DEMO_MODE и DEMO_SIGNATURE_ENABLED. Это не SMS, второй фактор или настоящая ЭП. signed ещё не установлен.
+     */
+    post: operations["v1_agreements_signature_attempt_create"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/agreements/{id}/signed-document/": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Сформировать отдельную копию с отметкой демо-подписи
+     * @description Только после сохранённой SignatureConfirmation. Ошибка копии не отменяет подпись; повтор создаёт только копию, не подписывает снова. Исходные PDF-байты неизменны.
+     */
+    post: operations["v1_agreements_signed_document_create"];
     delete?: never;
     options?: never;
     head?: never;
@@ -273,7 +373,7 @@ export interface paths {
     put?: never;
     /**
      * Предварительный аннуитетный расчёт
-     * @description Демо: равные месячные периоды, без комиссий. Итоговый последний платёж корректирует округление. Не является кредитным предложением.
+     * @description Учебный аннуитет и подробная стоимость: равные месячные периоды, комиссии/услуги исключены политикой демо. Передайте product: ставка и границы берутся с сервера. Альтернатива — annual_rate для самостоятельного расчёта, не банковского предложения. Последний платёж корректирует округление; юридическая ПСК не рассчитывается.
      */
     post: operations["v1_calculator_payment_create"];
     delete?: never;
@@ -662,6 +762,12 @@ export type webhooks = Record<string, never>;
 export interface components {
   schemas: {
     /**
+     * @description * `search_index` - search_index
+     *     * `direct` - direct
+     * @enum {string}
+     */
+    AccessModeEnum: "search_index" | "direct";
+    /**
      * @description * `update_draft` - update_draft
      *     * `submit` - submit
      *     * `retry_checks` - retry_checks
@@ -733,7 +839,30 @@ export interface components {
         };
         /** @enum {string} */
         signature_mode: "simulation";
+        cost_breakdown?: components["schemas"]["CostBreakdown"];
+        catalog_version?: string;
+        product_name?: string;
+        purpose?: string;
+        parties?: {
+          company: {
+            /** Format: uuid */
+            id: string;
+            inn: string;
+            name: string;
+            /** @enum {string} */
+            status: "active" | "inactive";
+            /** Format: date */
+            registered_at: string;
+            /** @enum {string} */
+            demo_scenario: "standard" | "bad_history" | "check_error";
+            is_existing_client: boolean;
+          };
+        };
       };
+      readonly cost_breakdown: components["schemas"]["CostBreakdown"];
+      readonly documents: components["schemas"]["AgreementDocument"][];
+      readonly confirmation:
+        components["schemas"]["SignatureConfirmation"] | null;
       /** SHA-256 условий */
       readonly document_hash: string;
       /** Format: uuid */
@@ -752,6 +881,29 @@ export interface components {
       readonly created_at: string;
       readonly disbursement: components["schemas"]["Disbursement"] | null;
     };
+    AgreementDocument: {
+      /** Format: uuid */
+      readonly id: string;
+      readonly kind: components["schemas"]["AgreementDocumentKindEnum"];
+      readonly version: number;
+      readonly template_version: string;
+      readonly calculator_version: string;
+      readonly terms_hash: string;
+      readonly pdf_sha256: string;
+      /** Format: uuid */
+      readonly source_document: string | null;
+      /**
+       * Создано
+       * Format: date-time
+       */
+      readonly created_at: string;
+    };
+    /**
+     * @description * `original` - Исходный договор
+     *     * `signed_copy` - Копия с отметкой демо-подтверждения
+     * @enum {string}
+     */
+    AgreementDocumentKindEnum: "original" | "signed_copy";
     Application: {
       /** Format: uuid */
       readonly id: string;
@@ -794,6 +946,7 @@ export interface components {
        */
       readonly status_changed_at: string;
       readonly available_actions: components["schemas"]["AvailableAction"][];
+      readonly readiness: components["schemas"]["ApplicationReadiness"];
     };
     /** @description Reject extra fields instead of silently dropping status/rate/role injection. */
     ApplicationCreateRequest: {
@@ -840,6 +993,21 @@ export interface components {
        * Format: date-time
        */
       readonly updated_at: string;
+    };
+    ApplicationReadiness: {
+      schema_version: number;
+      /** Format: uuid */
+      revision_id: string | null;
+      lock_version: number;
+      can_submit: boolean;
+      submit_reason_code: string | null;
+      financial_data_complete: boolean;
+      items: components["schemas"]["ReadinessItem"][];
+      verification_state: components["schemas"]["VerificationStateEnum"];
+      verification_message: string;
+      /** Format: date-time */
+      checked_at: string | null;
+      disclosure: string;
     };
     /**
      * @description * `draft` - Черновик
@@ -922,6 +1090,51 @@ export interface components {
        */
       target_id: string | null;
     };
+    /** @description Reject extra fields instead of silently dropping status/rate/role injection. */
+    CancelSignatureRequestRequest: {
+      /** Format: uuid */
+      attempt_id: string;
+    };
+    CatalogReference: {
+      schema_version: number;
+      value_type: components["schemas"]["CatalogReferenceValueTypeEnum"];
+      /** Format: uri */
+      source_url: string;
+      source_title: string;
+      /** Format: date */
+      observed_at: string;
+      /** Format: date */
+      effective_from: string | null;
+      access_mode: components["schemas"]["AccessModeEnum"];
+      currency: components["schemas"]["CurrencyEnum"];
+      /** Format: decimal */
+      min_amount: string;
+      /** Format: decimal */
+      max_amount: string;
+      min_term_months: number;
+      max_term_months: number;
+      /** Format: decimal */
+      advertised_rate_from: string;
+      minimum_business_age_months: number;
+      rate_note: string;
+      demo_rate_type: components["schemas"]["DemoAssumptionEnum"];
+      demo_cost_policy: components["schemas"]["DemoCostPolicyEnum"];
+      limitations: string;
+    };
+    /**
+     * @description * `public_product` - public_product
+     * @enum {string}
+     */
+    CatalogReferenceValueTypeEnum: "public_product";
+    /**
+     * @description * `amount` - amount
+     *     * `annual_rate` - annual_rate
+     *     * `term_months` - term_months
+     *     * `monthly_payment` - monthly_payment
+     * @enum {string}
+     */
+    ChangedFieldsEnum:
+      "amount" | "annual_rate" | "term_months" | "monthly_payment";
     Check: {
       /** Format: uuid */
       readonly id: string;
@@ -1010,6 +1223,16 @@ export interface components {
      * @enum {string}
      */
     CompanyStatusEnum: "active" | "inactive";
+    ComparisonTerms: {
+      /** Format: decimal */
+      amount: string;
+      /** Format: decimal */
+      annual_rate: string;
+      term_months: number;
+      /** Format: decimal */
+      monthly_payment: string;
+      cost_breakdown: components["schemas"]["CostBreakdown"];
+    };
     Conversation: {
       /** Format: uuid */
       readonly id: string;
@@ -1027,6 +1250,42 @@ export interface components {
       /** Format: date-time */
       readonly updated_at: string;
     };
+    CostBreakdown: {
+      schema_version: number;
+      calculation_version: string;
+      value_type: components["schemas"]["CostBreakdownValueTypeEnum"];
+      pricing_basis: components["schemas"]["DemoAssumptionEnum"];
+      currency: components["schemas"]["CurrencyEnum"];
+      is_complete: boolean;
+      /** Format: decimal */
+      principal: string;
+      /** Format: decimal */
+      net_disbursement: string | null;
+      /** Format: decimal */
+      interest_total: string;
+      /** Format: decimal */
+      fees_total: string | null;
+      /** Format: decimal */
+      services_total: string | null;
+      /** Format: decimal */
+      known_payments_total: string;
+      /** Format: decimal */
+      total_repayment: string | null;
+      /** Format: decimal */
+      total_cost: string | null;
+      /** Format: decimal */
+      first_payment: string | null;
+      /** Format: decimal */
+      last_payment: string | null;
+      /** Format: decimal */
+      max_payment: string | null;
+      disclosure: string;
+    };
+    /**
+     * @description * `derived` - derived
+     * @enum {string}
+     */
+    CostBreakdownValueTypeEnum: "derived";
     /** @description Reject extra fields instead of silently dropping status/rate/role injection. */
     CreateConversationRequest: {
       /** Format: uuid */
@@ -1060,6 +1319,21 @@ export interface components {
       csrf_token: string;
     };
     /**
+     * @description * `RUB` - RUB
+     * @enum {string}
+     */
+    CurrencyEnum: "RUB";
+    /**
+     * @description * `demo_assumption` - demo_assumption
+     * @enum {string}
+     */
+    DemoAssumptionEnum: "demo_assumption";
+    /**
+     * @description * `no_fees_no_services` - no_fees_no_services
+     * @enum {string}
+     */
+    DemoCostPolicyEnum: "no_fees_no_services";
+    /**
      * @description * `standard` - Стандартный
      *     * `check_error` - Ошибка регистрационной проверки
      *     * `bad_history` - Негативная кредитная история
@@ -1089,6 +1363,12 @@ export interface components {
        */
       readonly issued_at: string;
       readonly is_simulated: boolean;
+    };
+    /** @description Reject extra fields instead of silently dropping status/rate/role injection. */
+    DocumentGenerationRequestRequest: {
+      /** @description Актуальное значение из GET заявки. */
+      lock_version: number;
+      document_hash: string;
     };
     /** @description Сохраняет формат DRF: общая ошибка detail и необязательный code; ошибки по именам полей (строка или массив строк), non_field_errors; в старых общих validation-ответах возможен массив строк. */
     Error:
@@ -1126,6 +1406,11 @@ export interface components {
         /** @enum {string} */
         signature_mode?: "simulation";
         /** Format: uuid */
+        confirmation_id?: string;
+        /** Format: uuid */
+        document_id?: string;
+        pdf_sha256?: string;
+        /** Format: uuid */
         assigned_to?: string;
         /** @enum {string} */
         reason?: "manual" | "terminal_state";
@@ -1136,6 +1421,13 @@ export interface components {
        */
       readonly created_at: string;
     };
+    /**
+     * @description * `monthly_revenue` - monthly_revenue
+     *     * `monthly_expenses` - monthly_expenses
+     *     * `monthly_debt_payments` - monthly_debt_payments
+     * @enum {string}
+     */
+    FieldEnum: "monthly_revenue" | "monthly_expenses" | "monthly_debt_payments";
     Health: {
       status: string;
       database: string;
@@ -1503,6 +1795,8 @@ export interface components {
           balance: string;
         }[];
       };
+      readonly cost_breakdown: components["schemas"]["CostBreakdown"];
+      readonly comparison: components["schemas"]["OfferComparison"];
       /** Состояние */
       readonly status: components["schemas"]["OfferStatusEnum"];
       /**
@@ -1523,6 +1817,18 @@ export interface components {
        */
       readonly created_at: string;
       readonly agreement: components["schemas"]["Agreement"] | null;
+    };
+    OfferComparison: {
+      schema_version: number;
+      /** Format: uuid */
+      source_revision_id: string;
+      catalog_version: string;
+      policy_version: string;
+      reason_code: string;
+      explanation: string;
+      requested: components["schemas"]["ComparisonTerms"];
+      proposed: components["schemas"]["ComparisonTerms"];
+      changed_fields: components["schemas"]["ChangedFieldsEnum"][];
     };
     /**
      * @description * `available` - Доступно
@@ -1692,10 +1998,15 @@ export interface components {
     };
     /** @description Reject extra fields instead of silently dropping status/rate/role injection. */
     PaymentRequestRequest: {
+      /**
+       * Format: uuid
+       * @description Ставка выбранного продукта определяется сервером; annual_rate в этом режиме запрещена.
+       */
+      product?: string;
       /** Format: decimal */
       amount: string;
       /** Format: decimal */
-      annual_rate: string;
+      annual_rate?: string;
       term_months: number;
     };
     PaymentResponse: {
@@ -1721,6 +2032,11 @@ export interface components {
           balance: string;
         }[];
       };
+      /** Format: decimal */
+      annual_rate: string;
+      catalog_version: string | null;
+      rate_source: components["schemas"]["RateSourceEnum"];
+      cost_breakdown: components["schemas"]["CostBreakdown"];
     };
     Product: {
       /** Format: uuid */
@@ -1752,9 +2068,30 @@ export interface components {
       readonly annual_rate: string;
       /** Версия правил */
       readonly rules_version: string;
+      readonly catalog_reference:
+        components["schemas"]["CatalogReference"] | null;
       /** Доступен для заявок */
       readonly active: boolean;
     };
+    /**
+     * @description * `demo_assumption` - demo_assumption
+     *     * `custom_calculation` - custom_calculation
+     * @enum {string}
+     */
+    RateSourceEnum: "demo_assumption" | "custom_calculation";
+    ReadinessItem: {
+      field: components["schemas"]["FieldEnum"];
+      state: components["schemas"]["ReadinessItemStateEnum"];
+      label: string;
+      message: string;
+    };
+    /**
+     * @description * `ready` - ready
+     *     * `missing` - missing
+     *     * `invalid` - invalid
+     * @enum {string}
+     */
+    ReadinessItemStateEnum: "ready" | "missing" | "invalid";
     /**
      * @description * `role_required` - role_required
      *     * `capability_required` - capability_required
@@ -1867,6 +2204,9 @@ export interface components {
               max_amount: string;
               min_term_months: number;
               max_term_months: number;
+              catalog_reference?:
+                components["schemas"]["CatalogReference"] | null;
+              name?: string;
             };
             financial: {
               /** @example 1000000.00 */
@@ -1928,6 +2268,67 @@ export interface components {
       document_hash: string;
       /** @description Явное подтверждение условной подписи. */
       confirm_simulation: boolean;
+      /**
+       * Format: uuid
+       * @description Идентификатор просмотренного исходного PDF.
+       */
+      document_id: string;
+      /** @description Отдельный SHA-256 байтов PDF. */
+      pdf_sha256: string;
+      /** Format: uuid */
+      attempt_id: string;
+      code: string;
+    };
+    SignatureAttempt: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      document_id: string;
+      /** Format: date-time */
+      expires_at: string;
+      state: components["schemas"]["SignatureAttemptStateEnum"];
+      /** @description Только небезопасная для production симуляция. SMS не отправляется; это не второй фактор. */
+      demo_code: string;
+      simulation: boolean;
+    };
+    /** @description Reject extra fields instead of silently dropping status/rate/role injection. */
+    SignatureAttemptRequestRequest: {
+      /** @description Актуальное значение из GET заявки. */
+      lock_version: number;
+      document_hash: string;
+      /** Format: uuid */
+      document_id: string;
+      pdf_sha256: string;
+      /** @description Явно ознакомлен с условиями; открытие PDF это не заменяет. */
+      acknowledged: boolean;
+      confirm_simulation: boolean;
+    };
+    /**
+     * @description * `pending` - pending
+     *     * `cancelled` - cancelled
+     *     * `expired` - expired
+     *     * `locked` - locked
+     *     * `used` - used
+     * @enum {string}
+     */
+    SignatureAttemptStateEnum:
+      "pending" | "cancelled" | "expired" | "locked" | "used";
+    SignatureConfirmation: {
+      /** Format: uuid */
+      readonly id: string;
+      /** Format: uuid */
+      readonly document: string;
+      /** Format: uuid */
+      readonly attempt: string;
+      /** Format: uuid */
+      readonly user: string;
+      /** Format: uuid */
+      readonly company: string;
+      /** Format: date-time */
+      readonly confirmed_at: string;
+      readonly document_hash: string;
+      readonly pdf_sha256: string;
+      readonly mode: string;
     };
     SpecialistSummary: {
       /** Format: uuid */
@@ -2015,6 +2416,22 @@ export interface components {
       readonly system_role: components["schemas"]["SystemRoleEnum"];
       readonly memberships: components["schemas"]["Member"][];
     };
+    /**
+     * @description * `not_checked` - not_checked
+     *     * `pending` - pending
+     *     * `technical_error` - technical_error
+     *     * `needs_information` - needs_information
+     *     * `outdated` - outdated
+     *     * `checked` - checked
+     * @enum {string}
+     */
+    VerificationStateEnum:
+      | "not_checked"
+      | "pending"
+      | "technical_error"
+      | "needs_information"
+      | "outdated"
+      | "checked";
     /** @description Reject extra fields instead of silently dropping status/rate/role injection. */
     VersionRequest: {
       /** @description Актуальное значение из GET заявки. */
@@ -2163,6 +2580,86 @@ export interface operations {
       };
     };
   };
+  v1_agreements_cancel_signature_create: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description A UUID string identifying this Демо-договор. */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CancelSignatureRequestRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["CancelSignatureRequestRequest"];
+        "multipart/form-data": components["schemas"]["CancelSignatureRequestRequest"];
+      };
+    };
+    responses: {
+      /** @description No response body */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      /** @description Неверный JSON, поля или параметры. Исправьте форму. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Нет сессии, полномочий или корректного CSRF. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Ресурс не существует или скрыт company scope; также страница пагинации вне диапазона. */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Конфликт версии, назначения или состояния. GET карточки, проверка пользователем; не повторяйте действие автоматически. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Лимит запросов. Учитывайте Retry-After. */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+    };
+  };
   v1_agreements_disburse_create: {
     parameters: {
       query?: never;
@@ -2248,6 +2745,166 @@ export interface operations {
       };
     };
   };
+  v1_agreements_generate_document_create: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description A UUID string identifying this Демо-договор. */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["DocumentGenerationRequestRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["DocumentGenerationRequestRequest"];
+        "multipart/form-data": components["schemas"]["DocumentGenerationRequestRequest"];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AgreementDocument"];
+        };
+      };
+      /** @description Неверный JSON, поля или параметры. Исправьте форму. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Нет сессии, полномочий или корректного CSRF. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Ресурс не существует или скрыт company scope; также страница пагинации вне диапазона. */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Конфликт версии, назначения или состояния. GET карточки, проверка пользователем; не повторяйте действие автоматически. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Лимит запросов. Учитывайте Retry-After. */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+    };
+  };
+  v1_agreements_pdf_retrieve: {
+    parameters: {
+      query?: {
+        /** @description true: attachment; иначе inline */
+        download?: boolean;
+        /** @description По умолчанию original */
+        kind?: "original" | "signed_copy";
+      };
+      header?: never;
+      path: {
+        /** @description A UUID string identifying this Демо-договор. */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/pdf": string;
+        };
+      };
+      /** @description Неверный JSON, поля или параметры. Исправьте форму. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Нет сессии, полномочий или корректного CSRF. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Ресурс не существует или скрыт company scope; также страница пагинации вне диапазона. */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Лимит запросов. Учитывайте Retry-After. */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+    };
+  };
   v1_agreements_sign_create: {
     parameters: {
       query?: never;
@@ -2320,6 +2977,168 @@ export interface operations {
         };
       };
       /** @description PostgreSQL временно недоступен или истёк таймаут блокировки. Проверьте карточку перед повтором значимого действия. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+    };
+  };
+  v1_agreements_signature_attempt_create: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description A UUID string identifying this Демо-договор. */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["SignatureAttemptRequestRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["SignatureAttemptRequestRequest"];
+        "multipart/form-data": components["schemas"]["SignatureAttemptRequestRequest"];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["SignatureAttempt"];
+        };
+      };
+      /** @description Неверный JSON, поля или параметры. Исправьте форму. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Нет сессии, полномочий или корректного CSRF. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Ресурс не существует или скрыт company scope; также страница пагинации вне диапазона. */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Конфликт версии, назначения или состояния. GET карточки, проверка пользователем; не повторяйте действие автоматически. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Лимит запросов. Учитывайте Retry-After. */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+    };
+  };
+  v1_agreements_signed_document_create: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description A UUID string identifying this Демо-договор. */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["DocumentGenerationRequestRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["DocumentGenerationRequestRequest"];
+        "multipart/form-data": components["schemas"]["DocumentGenerationRequestRequest"];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AgreementDocument"];
+        };
+      };
+      /** @description Неверный JSON, поля или параметры. Исправьте форму. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Нет сессии, полномочий или корректного CSRF. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Ресурс не существует или скрыт company scope; также страница пагинации вне диапазона. */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Конфликт версии, назначения или состояния. GET карточки, проверка пользователем; не повторяйте действие автоматически. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Лимит запросов. Учитывайте Retry-After. */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
       503: {
         headers: {
           [name: string]: unknown;

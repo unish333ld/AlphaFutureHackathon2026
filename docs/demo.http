@@ -8,6 +8,10 @@
 @agreement = replace-with-agreement-uuid
 @version = 0
 @hash = replace-with-document-hash
+@document = replace-with-original-document-uuid
+@pdf_hash = replace-with-pdf-sha256
+@signature_attempt = replace-with-attempt-uuid
+@demo_code = replace-with-server-demo-code-do-not-log
 @conversation = replace-with-conversation-uuid
 @conversation_version = 0
 
@@ -29,6 +33,14 @@ GET {{base}}/companies/
 
 ### Продукты
 GET {{base}}/products/
+
+### Учебная стоимость по каталогу: ставка/границы берутся с сервера, заявка не создаётся.
+### Ответ: cost_breakdown, schedule, annual_rate, catalog_version. Не передавайте annual_rate вместе с product.
+POST {{base}}/calculator/payment/
+Content-Type: application/json
+X-CSRFToken: {{csrf}}
+
+{"product":"00000000-0000-0000-0000-000000000065","amount":"1500000.00","term_months":24}
 
 ### Создать черновик. UUID совпадают с seeds.
 POST {{base}}/applications/
@@ -72,18 +84,47 @@ X-CSRFToken: {{csrf}}
 {"lock_version":{{version}}}
 
 ### После входа клиентом — принять предложение
+### Сначала прочитайте comparison/cost_breakdown и проверьте source_revision_id.
+GET {{base}}/offers/{{offer}}/
+
+### Принять прочитанное предложение с актуальным lock_version.
 POST {{base}}/offers/{{offer}}/accept/
 Content-Type: application/json
 X-CSRFToken: {{csrf}}
 
 {"lock_version":{{version}}}
 
-### Условно подписать договор
+### Сформировать исходный PDF: права can_sign, источник — сохранённый снимок.
+POST {{base}}/agreements/{{agreement}}/generate-document/
+Content-Type: application/json
+X-CSRFToken: {{csrf}}
+
+{"lock_version":{{version}},"document_hash":"{{hash}}"}
+
+### Прочитать @document/@pdf_hash из ответа, открыть и скачать те же байты.
+GET {{base}}/agreements/{{agreement}}/pdf/?kind=original&download=true
+
+### Только после явного ознакомления: начать демо-попытку. SMS НЕ отправляется.
+### @signature_attempt/@demo_code — из этого ответа; код не помещать в отчёты/логи.
+POST {{base}}/agreements/{{agreement}}/signature-attempt/
+Content-Type: application/json
+X-CSRFToken: {{csrf}}
+
+{"lock_version":{{version}},"document_hash":"{{hash}}","document_id":"{{document}}","pdf_sha256":"{{pdf_hash}}","acknowledged":true,"confirm_simulation":true}
+
+### Подтвердить код: это ещё НЕ выдача. Старый hash-only запрос отклоняется.
 POST {{base}}/agreements/{{agreement}}/sign/
 Content-Type: application/json
 X-CSRFToken: {{csrf}}
 
-{"lock_version":{{version}},"document_hash":"{{hash}}","confirm_simulation":true}
+{"lock_version":{{version}},"document_hash":"{{hash}}","document_id":"{{document}}","pdf_sha256":"{{pdf_hash}}","attempt_id":"{{signature_attempt}}","code":"{{demo_code}}","confirm_simulation":true}
+
+### После чтения новой версии карточки: отдельная копия, без повторной подписи.
+POST {{base}}/agreements/{{agreement}}/signed-document/
+Content-Type: application/json
+X-CSRFToken: {{csrf}}
+
+{"lock_version":{{version}},"document_hash":"{{hash}}"}
 
 ### После входа специалистом — моделируемая выдача. Ключ сохраните для повтора.
 ### Специалист должен оставаться исполнителем; после sign загрузите карточку для новой @version.

@@ -1,5 +1,7 @@
 # Модель данных
 
+Дополнение API 1.2.0: стоимость/сравнение — read-only производные графика и рассмотренной ревизии; readiness — подсказки заполненности. Новые договоры сохраняют cost_breakdown/catalog_version в хэшируемом terms_snapshot, новые отправленные ревизии — catalog_reference продукта. Ключи опциональны для прежних снимков. Миграции products.0002/0003 и правила обновления каталога описаны в [product-research.md](product-research.md).
+
 Стек и границы: [stack.md](stack.md). Семантика полей/назначений и JSON: [frontend-integration.md](frontend-integration.md), точные типы — [openapi.yaml](openapi.yaml).
 
 Предметные идентификаторы — UUID. Денежные колонки — `NUMERIC(18,2)`, ставка — `NUMERIC(7,4)`, срок — месяцы, timestamps — timezone-aware UTC. API возвращает деньги десятичными строками. ИНН — строка; seeds используют заведомо синтетические номера.
@@ -22,6 +24,10 @@ erDiagram
     CreditProduct ||--o{ Offer : identifies
     Offer ||--o| Agreement : accepts
     Agreement ||--o| Disbursement : simulates
+    Agreement ||--o{ AgreementDocument : preserves
+    AgreementDocument ||--o{ SignatureAttempt : confirms_version
+    Agreement ||--o| SignatureConfirmation : signs_once
+    SignatureAttempt ||--o| SignatureConfirmation : consumes
     User ||--o{ Conversation : owns
     Company ||--o{ Conversation : scopes
     Application o|--o{ Conversation : contextualizes
@@ -35,7 +41,7 @@ erDiagram
 | User | UUID, username unique, system_role client/specialist, is_active. is_staff управляет Admin, а не кредитными действиями |
 | Company | inn unique, name, kind, registered_at, status, is_existing_client, demo_scenario |
 | CompanyMember | user/company PROTECT, unique(user,company), role, can_submit, can_sign, active |
-| CreditProduct | code unique, min/max_amount, min/max_term_months, annual_rate, rules_version, active. CHECK границ и ставки 0–100% |
+| CreditProduct | code unique, min/max_amount, min/max_term_months, annual_rate, rules_version, active; nullable catalog_reference JSON с источником/датой/единицами/ограничениями. CHECK границ и ставки 0–100% |
 | Application | UUID, number unique AC- + 16 hex, company/product/created_by PROTECT, status, lock_version, status_changed_at, timestamps; assigned_to nullable User PROTECT, assigned_at nullable. CHECK пары назначения; индексы очереди, исполнителя/статуса/даты и списка компании |
 | ApplicationRevision | unique(application,revision_no), amount/term/purpose, monthly_revenue/expenses/debt_payments, submitted_at, input_snapshot. CHECK положительных условий и неотрицательных финансов |
 | InformationRequest | revision, requested_by, question, response_revision OneToOne nullable, responded_at |
@@ -44,6 +50,9 @@ erDiagram
 | CreditDecision | assessment OneToOne, outcome, reason_code, explanation, decided_by SET_NULL, policy_version |
 | Offer | decision OneToOne, product, amount/rate/term, monthly_payment, schedule, status, expires_at/accepted_at/sign_before |
 | Agreement | offer OneToOne, number unique, terms_snapshot, document_hash, signed_by PROTECT, signed_at, signature_mode=simulation. CHECK согласованности подписи |
+| AgreementDocument | agreement PROTECT, original/signed_copy, version=1, UNIQUE(agreement,kind,version), template/calculator versions, frozen snapshot, terms_hash, pdf_sha256, private pdf_data, source_document PROTECT, created_at. Append-only |
+| SignatureAttempt | user/company/agreement/document PROTECT, lock_version, оба хеша, code_digest, expires_at, state pending/cancelled/expired/locked/used, failures<=5; один pending на участника и договор |
+| SignatureConfirmation | OneToOne agreement/document/attempt, user/company PROTECT, confirmed_at, оба хеша, mode=demo_code. Append-only, без кода |
 | Disbursement | agreement OneToOne, idempotency_key unique, amount>0, status=completed, issued_at, is_simulated=true |
 | ApplicationEvent | application PROTECT, actor SET_NULL, event_type, from/to_status, details, created_at. Индекс истории |
 | Conversation | user/company PROTECT, application nullable PROTECT, selected_product nullable SET_NULL; UUID, version, created_at/updated_at. Только владелец с действующим членством видит историю |

@@ -121,15 +121,12 @@ export const api = {
   action: (
     action: Action,
     version: number,
-    extra: {
-      question?: string;
-      document_hash?: string;
-      confirm_simulation?: boolean;
-    } = {},
+    extra: { question?: string } = {},
     idempotencyKey?: string,
   ) => {
     if (
       !action.allowed ||
+      action.action === "sign_agreement" ||
       !action.target_id ||
       !/^[0-9a-f-]{36}$/i.test(action.target_id)
     )
@@ -144,6 +141,33 @@ export const api = {
     );
   },
   agreement: (id: string) => request<Agreement>(`agreements/${id}/`),
+  generateDocument: (
+    id: string,
+    data: Schema["DocumentGenerationRequestRequest"],
+    signed = false,
+  ) =>
+    request<Schema["AgreementDocument"]>(
+      `agreements/${id}/${signed ? "signed-document" : "generate-document"}/`,
+      { method: "POST", body: data },
+    ),
+  signatureAttempt: (
+    id: string,
+    data: Schema["SignatureAttemptRequestRequest"],
+  ) =>
+    request<Schema["SignatureAttempt"]>(`agreements/${id}/signature-attempt/`, {
+      method: "POST",
+      body: data,
+    }),
+  cancelSignature: (id: string, attempt_id: string) =>
+    request<void>(`agreements/${id}/cancel-signature/`, {
+      method: "POST",
+      body: { attempt_id },
+    }),
+  sign: (id: string, data: Schema["SignRequestRequest"]) =>
+    request<Agreement>(`agreements/${id}/sign/`, {
+      method: "POST",
+      body: data,
+    }),
   events: (id: string, page: number, signal?: AbortSignal) =>
     request<Page<Schema["Event"]>>(
       `applications/${id}/events/${query({ page })}`,

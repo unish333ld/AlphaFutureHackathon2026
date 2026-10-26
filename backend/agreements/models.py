@@ -70,3 +70,102 @@ class Disbursement(AppendOnlyModel):
                 name="disbursement_demo_only",
             )
         ]
+
+
+class AgreementDocument(AppendOnlyModel):
+    """Private immutable bytes, deliberately not a public MEDIA_URL file."""
+
+    class Kind(models.TextChoices):
+        ORIGINAL = "original", "Исходный договор"
+        SIGNED_COPY = "signed_copy", "Копия с отметкой демо-подтверждения"
+
+    agreement = models.ForeignKey(Agreement, on_delete=models.PROTECT, related_name="documents")
+    kind = models.CharField(max_length=16, choices=Kind)
+    version = models.PositiveIntegerField(default=1)
+    template_version = models.CharField(max_length=48)
+    calculator_version = models.CharField(max_length=48)
+    snapshot = models.JSONField()
+    terms_hash = models.CharField(max_length=64)
+    pdf_sha256 = models.CharField(max_length=64)
+    pdf_data = models.BinaryField(editable=False)
+    source_document = models.ForeignKey(
+        "self", on_delete=models.PROTECT, null=True, related_name="copies"
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["agreement", "kind", "version"], name="unique_agreement_document"
+            ),
+            models.CheckConstraint(condition=models.Q(version=1), name="agreement_document_v1"),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(kind="original", source_document__isnull=True)
+                    | models.Q(kind="signed_copy", source_document__isnull=False)
+                ),
+                name="agreement_document_source",
+            ),
+        ]
+
+
+class SignatureAttempt(CreatedModel):
+    class State(models.TextChoices):
+        PENDING = "pending", "Ожидает код"
+        CANCELLED = "cancelled", "Отменена"
+        EXPIRED = "expired", "Истекла"
+        LOCKED = "locked", "Попытки исчерпаны"
+        USED = "used", "Использована"
+
+    agreement = models.ForeignKey(
+        Agreement, on_delete=models.PROTECT, related_name="signature_attempts"
+    )
+    document = models.ForeignKey(AgreementDocument, on_delete=models.PROTECT)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    company = models.ForeignKey("companies.Company", on_delete=models.PROTECT)
+    lock_version = models.PositiveIntegerField()
+    document_hash = models.CharField(max_length=64)
+    pdf_sha256 = models.CharField(max_length=64)
+    code_digest = models.CharField(max_length=64, editable=False)
+    expires_at = models.DateTimeField()
+    state = models.CharField(max_length=16, choices=State, default=State.PENDING)
+    failures = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["agreement", "user"],
+                condition=models.Q(state="pending"),
+                name="one_pending_signature_attempt",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(failures__lte=5), name="signature_attempt_limit"
+            ),
+            models.CheckConstraint(
+                condition=models.Q(state__in=["pending", "cancelled", "expired", "locked", "used"]),
+                name="signature_attempt_state",
+            ),
+        ]
+        indexes = [models.Index(fields=["user", "created_at"])]
+
+
+class SignatureConfirmation(AppendOnlyModel):
+    agreement = models.OneToOneField(
+        Agreement, on_delete=models.PROTECT, related_name="confirmation"
+    )
+    document = models.OneToOneField(
+        AgreementDocument, on_delete=models.PROTECT, related_name="confirmation"
+    )
+    attempt = models.OneToOneField(SignatureAttempt, on_delete=models.PROTECT)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    company = models.ForeignKey("companies.Company", on_delete=models.PROTECT)
+    confirmed_at = models.DateTimeField()
+    document_hash = models.CharField(max_length=64)
+    pdf_sha256 = models.CharField(max_length=64)
+    mode = models.CharField(max_length=24, default="demo_code", editable=False)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(mode="demo_code"), name="signature_confirmation_demo_only"
+            )
+        ]

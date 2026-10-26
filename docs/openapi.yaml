@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Умный кредитный кабинет предпринимателя
-  version: 1.1.0
+  version: 1.3.0
   description: 'Хакатонный backend: синтетические компании, локальные проверки, условная
     подпись и моделируемая выдача. Деньги передаются строками в рублях, сроки — в
     месяцах. Для Try it out [войдите в сессию](/api/session/login/) в той же вкладке.
@@ -175,6 +175,106 @@ paths:
                   summary: Пример ошибки
           description: PostgreSQL временно недоступен или истёк таймаут блокировки.
             Проверьте карточку перед повтором значимого действия.
+  /api/v1/agreements/{id}/cancel-signature/:
+    post:
+      operationId: v1_agreements_cancel_signature_create
+      description: 'Отмена не откатывает уже сохранённую подпись. USED даёт 409: сначала
+        перечитайте договор.'
+      summary: Отменить собственную ещё не использованную попытку
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Демо-договор.
+        required: true
+      tags:
+      - Договоры
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancelSignatureRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CancelSignatureRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CancelSignatureRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '204':
+          description: No response body
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Загрузите заявку заново.
+                    code: stale_version
+                  summary: Пример ошибки
+          description: Конфликт версии, назначения или состояния. GET карточки, проверка
+            пользователем; не повторяйте действие автоматически.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
   /api/v1/agreements/{id}/disburse/:
     post:
       operationId: v1_agreements_disburse_create
@@ -301,13 +401,223 @@ paths:
                   summary: Пример ошибки
           description: PostgreSQL временно недоступен или истёк таймаут блокировки.
             Проверьте карточку перед повтором значимого действия.
+  /api/v1/agreements/{id}/generate-document/:
+    post:
+      operationId: v1_agreements_generate_document_create
+      description: Только can_sign. Повтор возвращает тот же артефакт и байты. Стороны
+        фиксируются для этой версии. document_hash — канонические условия; pdf_sha256
+        — отдельный хеш байтов. Рендеринг вне транзакции; при изменении lock_version
+        — 409. Нет подписи и выдачи.
+      summary: Сформировать неизменяемый исходный PDF
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Демо-договор.
+        required: true
+      tags:
+      - Договоры
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentGenerationRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DocumentGenerationRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DocumentGenerationRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgreementDocument'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Загрузите заявку заново.
+                    code: stale_version
+                  summary: Пример ошибки
+          description: Конфликт версии, назначения или состояния. GET карточки, проверка
+            пользователем; не повторяйте действие автоматически.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+  /api/v1/agreements/{id}/pdf/:
+    get:
+      operationId: v1_agreements_pdf_retrieve
+      description: 'Авторизованный company scope; специалист может читать доступный
+        ему договор. Повтор отдаёт те же сохранённые байты. Cache-Control: private,
+        no-store; Vary: Cookie. Публичного media URL нет. Несформированный документ
+        — 404.'
+      summary: Открыть или скачать сохранённый приватный PDF
+      parameters:
+      - in: query
+        name: download
+        schema:
+          type: boolean
+        description: 'true: attachment; иначе inline'
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Демо-договор.
+        required: true
+      - in: query
+        name: kind
+        schema:
+          type: string
+          enum:
+          - original
+          - signed_copy
+        description: По умолчанию original
+      tags:
+      - Договоры
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
   /api/v1/agreements/{id}/sign/:
     post:
       operationId: v1_agreements_sign_create
-      description: Требует can_sign, document_hash и confirm_simulation=true; назначение
-        специалиста не ограничивает клиента. Срок подписи — sign_before. Юридически
-        значимая электронная подпись не выполняется. После успеха GET /api/v1/applications/{application_id}/
-        возвращает новый lock_version; application_id есть у предложения.
+      description: 'Единственный маршрут подписи: can_sign, актуальные lock_version/document_hash,
+        document_id/pdf_sha256 просмотренного PDF, pending attempt_id, одноразовый
+        code и confirm_simulation=true. Старый hash-only запрос больше не подписывает
+        (400). Ошибки кода учитываются, после пяти попытка блокируется. Код не является
+        ЭП/SMS; назначение не ограничивает клиента. После успеха перечитайте карточку:
+        signed, новый lock_version, но ещё не issued. Копия с отметкой создаётся отдельным
+        signed-document, её ошибка не повторяет подпись.'
       summary: Условно подписать принятую версию договора
       parameters:
       - in: path
@@ -414,6 +724,218 @@ paths:
                   summary: Пример ошибки
           description: PostgreSQL временно недоступен или истёк таймаут блокировки.
             Проверьте карточку перед повтором значимого действия.
+  /api/v1/agreements/{id}/signature-attempt/:
+    post:
+      operationId: v1_agreements_signature_attempt_create
+      description: Только can_sign после явного ознакомления с конкретным PDF. Срок
+        2 минуты, до 5 проверок, до 10 новых попыток в час на участника и договор.
+        Повтор открытия возвращает допустимую pending-попытку; устаревшая отменяется.
+        Код возвращается браузеру только при DEMO_MODE и DEMO_SIGNATURE_ENABLED. Это
+        не SMS, второй фактор или настоящая ЭП. signed ещё не установлен.
+      summary: Начать демонстрационное подтверждение кодом
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Демо-договор.
+        required: true
+      tags:
+      - Договоры
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignatureAttemptRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SignatureAttemptRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SignatureAttemptRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignatureAttempt'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Загрузите заявку заново.
+                    code: stale_version
+                  summary: Пример ошибки
+          description: Конфликт версии, назначения или состояния. GET карточки, проверка
+            пользователем; не повторяйте действие автоматически.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+  /api/v1/agreements/{id}/signed-document/:
+    post:
+      operationId: v1_agreements_signed_document_create
+      description: Только после сохранённой SignatureConfirmation. Ошибка копии не
+        отменяет подпись; повтор создаёт только копию, не подписывает снова. Исходные
+        PDF-байты неизменны.
+      summary: Сформировать отдельную копию с отметкой демо-подписи
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Демо-договор.
+        required: true
+      tags:
+      - Договоры
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentGenerationRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DocumentGenerationRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DocumentGenerationRequestRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgreementDocument'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Загрузите заявку заново.
+                    code: stale_version
+                  summary: Пример ошибки
+          description: Конфликт версии, назначения или состояния. GET карточки, проверка
+            пользователем; не повторяйте действие автоматически.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
   /api/v1/applications/:
     get:
       operationId: v1_applications_list
@@ -1900,8 +2422,11 @@ paths:
   /api/v1/calculator/payment/:
     post:
       operationId: v1_calculator_payment_create
-      description: 'Демо: равные месячные периоды, без комиссий. Итоговый последний
-        платёж корректирует округление. Не является кредитным предложением.'
+      description: 'Учебный аннуитет и подробная стоимость: равные месячные периоды,
+        комиссии/услуги исключены политикой демо. Передайте product: ставка и границы
+        берутся с сервера. Альтернатива — annual_rate для самостоятельного расчёта,
+        не банковского предложения. Последний платёж корректирует округление; юридическая
+        ПСК не рассчитывается.'
       summary: Предварительный аннуитетный расчёт
       tags:
       - Продукты
@@ -3994,6 +4519,14 @@ paths:
             Проверьте карточку перед повтором значимого действия.
 components:
   schemas:
+    AccessModeEnum:
+      enum:
+      - search_index
+      - direct
+      type: string
+      description: |-
+        * `search_index` - search_index
+        * `direct` - direct
     ActionEnum:
       enum:
       - update_draft
@@ -4127,6 +4660,55 @@ components:
               type: string
               enum:
               - simulation
+            cost_breakdown:
+              $ref: '#/components/schemas/CostBreakdown'
+            catalog_version:
+              type: string
+            product_name:
+              type: string
+            purpose:
+              type: string
+            parties:
+              type: object
+              properties:
+                company:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uuid
+                    inn:
+                      type: string
+                    name:
+                      type: string
+                    status:
+                      type: string
+                      enum:
+                      - active
+                      - inactive
+                    registered_at:
+                      type: string
+                      format: date
+                    demo_scenario:
+                      type: string
+                      enum:
+                      - standard
+                      - bad_history
+                      - check_error
+                    is_existing_client:
+                      type: boolean
+                  required:
+                  - id
+                  - inn
+                  - name
+                  - status
+                  - registered_at
+                  - demo_scenario
+                  - is_existing_client
+                  additionalProperties: false
+              required:
+              - company
+              additionalProperties: false
           required:
           - schema_version
           - offer_id
@@ -4139,6 +4721,20 @@ components:
           - signature_mode
           additionalProperties: false
           readOnly: true
+        cost_breakdown:
+          allOf:
+          - $ref: '#/components/schemas/CostBreakdown'
+          readOnly: true
+        documents:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgreementDocument'
+          readOnly: true
+        confirmation:
+          allOf:
+          - $ref: '#/components/schemas/SignatureConfirmation'
+          readOnly: true
+          nullable: true
         document_hash:
           type: string
           readOnly: true
@@ -4169,9 +4765,12 @@ components:
           readOnly: true
           nullable: true
       required:
+      - confirmation
+      - cost_breakdown
       - created_at
       - disbursement
       - document_hash
+      - documents
       - id
       - number
       - offer
@@ -4179,6 +4778,60 @@ components:
       - signed_at
       - signed_by
       - terms_snapshot
+    AgreementDocument:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/AgreementDocumentKindEnum'
+          readOnly: true
+        version:
+          type: integer
+          readOnly: true
+        template_version:
+          type: string
+          readOnly: true
+        calculator_version:
+          type: string
+          readOnly: true
+        terms_hash:
+          type: string
+          readOnly: true
+        pdf_sha256:
+          type: string
+          readOnly: true
+        source_document:
+          type: string
+          format: uuid
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Создано
+      required:
+      - calculator_version
+      - created_at
+      - id
+      - kind
+      - pdf_sha256
+      - source_document
+      - template_version
+      - terms_hash
+      - version
+    AgreementDocumentKindEnum:
+      enum:
+      - original
+      - signed_copy
+      type: string
+      description: |-
+        * `original` - Исходный договор
+        * `signed_copy` - Копия с отметкой демо-подтверждения
     Application:
       type: object
       properties:
@@ -4258,6 +4911,10 @@ components:
           items:
             $ref: '#/components/schemas/AvailableAction'
           readOnly: true
+        readiness:
+          allOf:
+          - $ref: '#/components/schemas/ApplicationReadiness'
+          readOnly: true
       required:
       - assigned_at
       - assigned_to
@@ -4272,6 +4929,7 @@ components:
       - number
       - product
       - product_name
+      - readiness
       - revisions
       - status
       - status_changed_at
@@ -4376,6 +5034,50 @@ components:
       - product_name
       - status
       - updated_at
+    ApplicationReadiness:
+      type: object
+      properties:
+        schema_version:
+          type: integer
+        revision_id:
+          type: string
+          format: uuid
+          nullable: true
+        lock_version:
+          type: integer
+        can_submit:
+          type: boolean
+        submit_reason_code:
+          type: string
+          nullable: true
+        financial_data_complete:
+          type: boolean
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReadinessItem'
+        verification_state:
+          $ref: '#/components/schemas/VerificationStateEnum'
+        verification_message:
+          type: string
+        checked_at:
+          type: string
+          format: date-time
+          nullable: true
+        disclosure:
+          type: string
+      required:
+      - can_submit
+      - checked_at
+      - disclosure
+      - financial_data_complete
+      - items
+      - lock_version
+      - revision_id
+      - schema_version
+      - submit_reason_code
+      - verification_message
+      - verification_state
     ApplicationStatusEnum:
       enum:
       - draft
@@ -4527,6 +5229,101 @@ components:
       - allowed
       - reason_code
       - target_id
+    CancelSignatureRequestRequest:
+      type: object
+      description: Reject extra fields instead of silently dropping status/rate/role
+        injection.
+      properties:
+        attempt_id:
+          type: string
+          format: uuid
+      required:
+      - attempt_id
+    CatalogReference:
+      type: object
+      properties:
+        schema_version:
+          type: integer
+        value_type:
+          $ref: '#/components/schemas/CatalogReferenceValueTypeEnum'
+        source_url:
+          type: string
+          format: uri
+        source_title:
+          type: string
+        observed_at:
+          type: string
+          format: date
+        effective_from:
+          type: string
+          format: date
+          nullable: true
+        access_mode:
+          $ref: '#/components/schemas/AccessModeEnum'
+        currency:
+          $ref: '#/components/schemas/CurrencyEnum'
+        min_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+        max_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+        min_term_months:
+          type: integer
+        max_term_months:
+          type: integer
+        advertised_rate_from:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,4})?$
+        minimum_business_age_months:
+          type: integer
+        rate_note:
+          type: string
+        demo_rate_type:
+          $ref: '#/components/schemas/DemoAssumptionEnum'
+        demo_cost_policy:
+          $ref: '#/components/schemas/DemoCostPolicyEnum'
+        limitations:
+          type: string
+      required:
+      - access_mode
+      - advertised_rate_from
+      - currency
+      - demo_cost_policy
+      - demo_rate_type
+      - effective_from
+      - limitations
+      - max_amount
+      - max_term_months
+      - min_amount
+      - min_term_months
+      - minimum_business_age_months
+      - observed_at
+      - rate_note
+      - schema_version
+      - source_title
+      - source_url
+      - value_type
+    CatalogReferenceValueTypeEnum:
+      enum:
+      - public_product
+      type: string
+      description: '* `public_product` - public_product'
+    ChangedFieldsEnum:
+      enum:
+      - amount
+      - annual_rate
+      - term_months
+      - monthly_payment
+      type: string
+      description: |-
+        * `amount` - amount
+        * `annual_rate` - annual_rate
+        * `term_months` - term_months
+        * `monthly_payment` - monthly_payment
     Check:
       type: object
       properties:
@@ -4709,6 +5506,31 @@ components:
       description: |-
         * `active` - Действует
         * `inactive` - Деятельность прекращена
+    ComparisonTerms:
+      type: object
+      properties:
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+        annual_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,4})?$
+        term_months:
+          type: integer
+        monthly_payment:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+        cost_breakdown:
+          $ref: '#/components/schemas/CostBreakdown'
+      required:
+      - amount
+      - annual_rate
+      - cost_breakdown
+      - monthly_payment
+      - term_months
     Conversation:
       type: object
       properties:
@@ -4749,6 +5571,99 @@ components:
       - id
       - updated_at
       - version
+    CostBreakdown:
+      type: object
+      properties:
+        schema_version:
+          type: integer
+        calculation_version:
+          type: string
+        value_type:
+          $ref: '#/components/schemas/CostBreakdownValueTypeEnum'
+        pricing_basis:
+          $ref: '#/components/schemas/DemoAssumptionEnum'
+        currency:
+          $ref: '#/components/schemas/CurrencyEnum'
+        is_complete:
+          type: boolean
+        principal:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+        net_disbursement:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          nullable: true
+        interest_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
+        fees_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
+          nullable: true
+        services_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
+          nullable: true
+        known_payments_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
+        total_repayment:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
+          nullable: true
+        total_cost:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,18}(?:\.\d{0,2})?$
+          nullable: true
+        first_payment:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          nullable: true
+        last_payment:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          nullable: true
+        max_payment:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,16}(?:\.\d{0,2})?$
+          nullable: true
+        disclosure:
+          type: string
+      required:
+      - calculation_version
+      - currency
+      - disclosure
+      - fees_total
+      - first_payment
+      - interest_total
+      - is_complete
+      - known_payments_total
+      - last_payment
+      - max_payment
+      - net_disbursement
+      - pricing_basis
+      - principal
+      - schema_version
+      - services_total
+      - total_cost
+      - total_repayment
+      - value_type
+    CostBreakdownValueTypeEnum:
+      enum:
+      - derived
+      type: string
+      description: '* `derived` - derived'
     CreateConversationRequest:
       type: object
       description: Reject extra fields instead of silently dropping status/rate/role
@@ -4823,6 +5738,21 @@ components:
           type: string
       required:
       - csrf_token
+    CurrencyEnum:
+      enum:
+      - RUB
+      type: string
+      description: '* `RUB` - RUB'
+    DemoAssumptionEnum:
+      enum:
+      - demo_assumption
+      type: string
+      description: '* `demo_assumption` - demo_assumption'
+    DemoCostPolicyEnum:
+      enum:
+      - no_fees_no_services
+      type: string
+      description: '* `no_fees_no_services` - no_fees_no_services'
     DemoScenarioEnum:
       enum:
       - standard
@@ -4875,6 +5805,22 @@ components:
       - is_simulated
       - issued_at
       - status
+    DocumentGenerationRequestRequest:
+      type: object
+      description: Reject extra fields instead of silently dropping status/rate/role
+        injection.
+      properties:
+        lock_version:
+          type: integer
+          minimum: 0
+          description: Актуальное значение из GET заявки.
+        document_hash:
+          type: string
+          minLength: 1
+          pattern: ^[0-9a-f]{64}$
+      required:
+      - document_hash
+      - lock_version
     Error:
       description: 'Сохраняет формат DRF: общая ошибка detail и необязательный code;
         ошибки по именам полей (строка или массив строк), non_field_errors; в старых
@@ -4957,6 +5903,14 @@ components:
               type: string
               enum:
               - simulation
+            confirmation_id:
+              type: string
+              format: uuid
+            document_id:
+              type: string
+              format: uuid
+            pdf_sha256:
+              type: string
             assigned_to:
               type: string
               format: uuid
@@ -4985,6 +5939,16 @@ components:
       - from_status
       - id
       - to_status
+    FieldEnum:
+      enum:
+      - monthly_revenue
+      - monthly_expenses
+      - monthly_debt_payments
+      type: string
+      description: |-
+        * `monthly_revenue` - monthly_revenue
+        * `monthly_expenses` - monthly_expenses
+        * `monthly_debt_payments` - monthly_debt_payments
     Health:
       type: object
       properties:
@@ -5840,6 +6804,14 @@ components:
           - rows
           additionalProperties: false
           readOnly: true
+        cost_breakdown:
+          allOf:
+          - $ref: '#/components/schemas/CostBreakdown'
+          readOnly: true
+        comparison:
+          allOf:
+          - $ref: '#/components/schemas/OfferComparison'
+          readOnly: true
         status:
           allOf:
           - $ref: '#/components/schemas/OfferStatusEnum'
@@ -5877,6 +6849,8 @@ components:
       - amount
       - annual_rate
       - application_id
+      - comparison
+      - cost_breakdown
       - created_at
       - decision
       - expires_at
@@ -5887,6 +6861,40 @@ components:
       - sign_before
       - status
       - term_months
+    OfferComparison:
+      type: object
+      properties:
+        schema_version:
+          type: integer
+        source_revision_id:
+          type: string
+          format: uuid
+        catalog_version:
+          type: string
+        policy_version:
+          type: string
+        reason_code:
+          type: string
+        explanation:
+          type: string
+        requested:
+          $ref: '#/components/schemas/ComparisonTerms'
+        proposed:
+          $ref: '#/components/schemas/ComparisonTerms'
+        changed_fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChangedFieldsEnum'
+      required:
+      - catalog_version
+      - changed_fields
+      - explanation
+      - policy_version
+      - proposed
+      - reason_code
+      - requested
+      - schema_version
+      - source_revision_id
     OfferStatusEnum:
       enum:
       - available
@@ -6158,6 +7166,11 @@ components:
       description: Reject extra fields instead of silently dropping status/rate/role
         injection.
       properties:
+        product:
+          type: string
+          format: uuid
+          description: Ставка выбранного продукта определяется сервером; annual_rate
+            в этом режиме запрещена.
         amount:
           type: string
           format: decimal
@@ -6172,7 +7185,6 @@ components:
           minimum: 1
       required:
       - amount
-      - annual_rate
       - term_months
     PaymentResponse:
       type: object
@@ -6238,8 +7250,23 @@ components:
           additionalProperties: false
           description: 'График v1: месяц, платёж, основной долг, проценты, остаток;
             без комиссий.'
+        annual_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,4})?$
+        catalog_version:
+          type: string
+          nullable: true
+        rate_source:
+          $ref: '#/components/schemas/RateSourceEnum'
+        cost_breakdown:
+          $ref: '#/components/schemas/CostBreakdown'
       required:
+      - annual_rate
+      - catalog_version
+      - cost_breakdown
       - monthly_payment
+      - rate_source
       - schedule
     Product:
       type: object
@@ -6291,6 +7318,11 @@ components:
           type: string
           readOnly: true
           title: Версия правил
+        catalog_reference:
+          allOf:
+          - $ref: '#/components/schemas/CatalogReference'
+          readOnly: true
+          nullable: true
         active:
           type: boolean
           readOnly: true
@@ -6298,6 +7330,7 @@ components:
       required:
       - active
       - annual_rate
+      - catalog_reference
       - code
       - description
       - id
@@ -6307,6 +7340,40 @@ components:
       - min_term_months
       - name
       - rules_version
+    RateSourceEnum:
+      enum:
+      - demo_assumption
+      - custom_calculation
+      type: string
+      description: |-
+        * `demo_assumption` - demo_assumption
+        * `custom_calculation` - custom_calculation
+    ReadinessItem:
+      type: object
+      properties:
+        field:
+          $ref: '#/components/schemas/FieldEnum'
+        state:
+          $ref: '#/components/schemas/ReadinessItemStateEnum'
+        label:
+          type: string
+        message:
+          type: string
+      required:
+      - field
+      - label
+      - message
+      - state
+    ReadinessItemStateEnum:
+      enum:
+      - ready
+      - missing
+      - invalid
+      type: string
+      description: |-
+        * `ready` - ready
+        * `missing` - missing
+        * `invalid` - invalid
     ReasonCodeEnum:
       enum:
       - role_required
@@ -6483,6 +7550,12 @@ components:
                     type: integer
                     minimum: 1
                     maximum: 120
+                  catalog_reference:
+                    allOf:
+                    - $ref: '#/components/schemas/CatalogReference'
+                    nullable: true
+                  name:
+                    type: string
                 required:
                 - id
                 - code
@@ -6649,10 +7722,150 @@ components:
         confirm_simulation:
           type: boolean
           description: Явное подтверждение условной подписи.
+        document_id:
+          type: string
+          format: uuid
+          description: Идентификатор просмотренного исходного PDF.
+        pdf_sha256:
+          type: string
+          minLength: 1
+          description: Отдельный SHA-256 байтов PDF.
+          pattern: ^[0-9a-f]{64}$
+        attempt_id:
+          type: string
+          format: uuid
+        code:
+          type: string
+          writeOnly: true
+          minLength: 1
+          pattern: ^[0-9]{6}$
       required:
+      - attempt_id
+      - code
       - confirm_simulation
       - document_hash
+      - document_id
       - lock_version
+      - pdf_sha256
+    SignatureAttempt:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        document_id:
+          type: string
+          format: uuid
+        expires_at:
+          type: string
+          format: date-time
+        state:
+          $ref: '#/components/schemas/SignatureAttemptStateEnum'
+        demo_code:
+          type: string
+          description: Только небезопасная для production симуляция. SMS не отправляется;
+            это не второй фактор.
+        simulation:
+          type: boolean
+      required:
+      - demo_code
+      - document_id
+      - expires_at
+      - id
+      - simulation
+      - state
+    SignatureAttemptRequestRequest:
+      type: object
+      description: Reject extra fields instead of silently dropping status/rate/role
+        injection.
+      properties:
+        lock_version:
+          type: integer
+          minimum: 0
+          description: Актуальное значение из GET заявки.
+        document_hash:
+          type: string
+          minLength: 1
+          pattern: ^[0-9a-f]{64}$
+        document_id:
+          type: string
+          format: uuid
+        pdf_sha256:
+          type: string
+          minLength: 1
+          pattern: ^[0-9a-f]{64}$
+        acknowledged:
+          type: boolean
+          description: Явно ознакомлен с условиями; открытие PDF это не заменяет.
+        confirm_simulation:
+          type: boolean
+      required:
+      - acknowledged
+      - confirm_simulation
+      - document_hash
+      - document_id
+      - lock_version
+      - pdf_sha256
+    SignatureAttemptStateEnum:
+      enum:
+      - pending
+      - cancelled
+      - expired
+      - locked
+      - used
+      type: string
+      description: |-
+        * `pending` - pending
+        * `cancelled` - cancelled
+        * `expired` - expired
+        * `locked` - locked
+        * `used` - used
+    SignatureConfirmation:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        document:
+          type: string
+          format: uuid
+          readOnly: true
+        attempt:
+          type: string
+          format: uuid
+          readOnly: true
+        user:
+          type: string
+          format: uuid
+          readOnly: true
+        company:
+          type: string
+          format: uuid
+          readOnly: true
+        confirmed_at:
+          type: string
+          format: date-time
+          readOnly: true
+        document_hash:
+          type: string
+          readOnly: true
+        pdf_sha256:
+          type: string
+          readOnly: true
+        mode:
+          type: string
+          readOnly: true
+      required:
+      - attempt
+      - company
+      - confirmed_at
+      - document
+      - document_hash
+      - id
+      - mode
+      - pdf_sha256
+      - user
     SpecialistSummary:
       type: object
       properties:
@@ -6833,6 +8046,22 @@ components:
       - memberships
       - system_role
       - username
+    VerificationStateEnum:
+      enum:
+      - not_checked
+      - pending
+      - technical_error
+      - needs_information
+      - outdated
+      - checked
+      type: string
+      description: |-
+        * `not_checked` - not_checked
+        * `pending` - pending
+        * `technical_error` - technical_error
+        * `needs_information` - needs_information
+        * `outdated` - outdated
+        * `checked` - checked
     VersionRequest:
       type: object
       description: Reject extra fields instead of silently dropping status/rate/role

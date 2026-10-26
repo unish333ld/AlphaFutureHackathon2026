@@ -28,6 +28,8 @@ export function useApplication(id: string) {
     queryKey: [...scope, "application", id],
     queryFn: ({ signal }) =>
       api.application(id, user?.system_role === "specialist", signal),
+    refetchInterval: (query) =>
+      query.state.data?.status === "signed" ? 5000 : false,
   });
 }
 export function useRefreshCredit() {

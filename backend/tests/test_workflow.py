@@ -19,6 +19,7 @@ from applications.models import Application, ApplicationRevision
 from common.exceptions import Conflict
 from offers.models import Offer
 from products.calculations import annuity_payment, payment_schedule
+from tests.signing import signing_payload
 
 
 def post(api, user, path, data, expected=200, **headers):
@@ -57,11 +58,7 @@ def signed_agreement(api, demo, app):
         api,
         demo["client"],
         f"agreements/{agreement['id']}/sign/",
-        {
-            "lock_version": result["lock_version"],
-            "document_hash": agreement["document_hash"],
-            "confirm_simulation": True,
-        },
+        signing_payload(demo["client"], agreement, result["lock_version"]),
     )
     app.refresh_from_db()
     return agreement
@@ -233,11 +230,7 @@ def test_sign_requires_permission_and_exact_hash(demo, api):
         api, demo["client"], f"offers/{offer['id']}/accept/", {"lock_version": app.lock_version}
     )
     agreement = result["revisions"][0]["assessment"]["decision"]["offer"]["agreement"]
-    payload = {
-        "lock_version": result["lock_version"],
-        "document_hash": agreement["document_hash"],
-        "confirm_simulation": True,
-    }
+    payload = signing_payload(demo["client"], agreement, result["lock_version"])
     path = f"agreements/{agreement['id']}/sign/"
     post(api, demo["accountant"], path, payload, expected=403)
     post(api, demo["client"], path, {**payload, "document_hash": "0" * 64}, expected=409)
@@ -448,16 +441,13 @@ def test_signing_deadline_expires_without_signature(demo, api):
         api, demo["client"], f"offers/{offer['id']}/accept/", {"lock_version": app.lock_version}
     )
     agreement = result["revisions"][0]["assessment"]["decision"]["offer"]["agreement"]
+    payload = signing_payload(demo["client"], agreement, result["lock_version"])
     Offer.objects.filter(pk=offer["id"]).update(sign_before=timezone.now() - timedelta(seconds=1))
     post(
         api,
         demo["client"],
         f"agreements/{agreement['id']}/sign/",
-        {
-            "lock_version": result["lock_version"],
-            "document_hash": agreement["document_hash"],
-            "confirm_simulation": True,
-        },
+        payload,
         expected=409,
     )
     app.refresh_from_db()

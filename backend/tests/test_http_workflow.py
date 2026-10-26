@@ -95,6 +95,25 @@ def test_credit_lifecycle_over_real_http_with_sessions_csrf_and_role_changes(dem
     )
     agreement = accepted["revisions"][0]["assessment"]["decision"]["offer"]["agreement"]
     agreement_path = f"/api/v1/agreements/{agreement['id']}/"
+    document = http(
+        "POST",
+        agreement_path + "generate-document/",
+        {"lock_version": accepted["lock_version"], "document_hash": agreement["document_hash"]},
+        csrf=csrf,
+    )
+    attempt = http(
+        "POST",
+        agreement_path + "signature-attempt/",
+        {
+            "lock_version": accepted["lock_version"],
+            "document_hash": agreement["document_hash"],
+            "document_id": document["id"],
+            "pdf_sha256": document["pdf_sha256"],
+            "acknowledged": True,
+            "confirm_simulation": True,
+        },
+        csrf=csrf,
+    )
     signed = http(
         "POST",
         agreement_path + "sign/",
@@ -102,6 +121,10 @@ def test_credit_lifecycle_over_real_http_with_sessions_csrf_and_role_changes(dem
             "lock_version": accepted["lock_version"],
             "document_hash": agreement["document_hash"],
             "confirm_simulation": True,
+            "document_id": document["id"],
+            "pdf_sha256": document["pdf_sha256"],
+            "attempt_id": attempt["id"],
+            "code": attempt["demo_code"],
         },
         csrf=csrf,
     )

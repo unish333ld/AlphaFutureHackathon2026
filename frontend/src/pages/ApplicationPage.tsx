@@ -5,6 +5,7 @@ import { useAuth } from "../app/auth";
 import { useApplication, useScope } from "../app/queries";
 import { api, type Application } from "../shared/api/client";
 import {
+  actionFor,
   checkLabels,
   checkStatuses,
   currentAssessment,
@@ -28,6 +29,10 @@ import { PageTitle } from "../shared/ui/PageTitle";
 import { ApplicationActions } from "../features/ApplicationActions";
 import { History } from "../features/History";
 import { Schedule } from "../features/Schedule";
+import { AgreementDocuments } from "../features/AgreementDocuments";
+import { IssuanceFeedback } from "../features/CompletionFeedback";
+import { CreditCost, OfferComparison } from "../features/CreditDisclosure";
+import { ReadinessChecklist } from "../features/ReadinessChecklist";
 import s from "../app/layout.module.css";
 import d from "../features/detail.module.css";
 
@@ -139,6 +144,7 @@ function ApplicationContent({
         <span className={s.muted}>Изменена {date(app.updated_at)}</span>
         <span className={s.muted}>Версия {app.lock_version}</span>
       </div>
+      <IssuanceFeedback app={app} />
       {!revision ? (
         <Notice tone="error" title="Нет актуальной ревизии">
           Сервер не вернул данные текущей версии. Обновите карточку; старые
@@ -209,6 +215,7 @@ function ApplicationContent({
                 />
               )}
             </Panel>
+            <ReadinessChecklist app={app} staff={staff} />
             <Panel title="Месячные показатели">
               <Facts
                 rows={[
@@ -303,7 +310,7 @@ function ApplicationContent({
                   <Facts
                     rows={[
                       {
-                        label: "Месячный поток",
+                        label: "Операционный поток до платежей по долгам",
                         value: money(assessment.factors.monthly_cashflow),
                       },
                       {
@@ -357,11 +364,9 @@ function ApplicationContent({
                 {offer ? (
                   <>
                     <div className={s.bigAmount}>{money(offer.amount)}</div>
-                    {decision.outcome === "counteroffer" ? (
-                      <p className={s.muted}>
-                        Запрашивалось {money(revision.amount)}. Сервер предложил
-                        меньшую сумму.
-                      </p>
+                    {decision.outcome === "counteroffer" &&
+                    offer.comparison.source_revision_id === revision.id ? (
+                      <OfferComparison value={offer.comparison} />
                     ) : null}
                     <Facts
                       rows={[
@@ -383,6 +388,7 @@ function ApplicationContent({
                       ]}
                     />
                     <hr className={s.rule} />
+                    <CreditCost value={offer.cost_breakdown} />
                     <Schedule schedule={offer.schedule} />
                   </>
                 ) : null}
@@ -391,6 +397,12 @@ function ApplicationContent({
             {agreement ? (
               <Panel title="Демонстрационный договор">
                 <h3 className={d.contractNumber}>{agreement.number}</h3>
+                <AgreementDocuments
+                  app={app}
+                  agreement={agreement}
+                  reload={refresh}
+                />
+                <CreditCost value={agreement.cost_breakdown} />
                 <Facts
                   rows={[
                     {
@@ -457,7 +469,9 @@ function ApplicationContent({
                 <p className={s.muted}>
                   {app.assigned_at
                     ? `Назначена ${date(app.assigned_at)}`
-                    : "Свободную заявку может взять в работу специалист."}
+                    : actionFor(app, "claim")?.allowed
+                      ? "Свободную заявку может взять в работу специалист."
+                      : "Назначение специалиста в текущем состоянии недоступно."}
                 </p>
                 {app.assigned_to && app.assigned_to.id !== user?.id ? (
                   <Notice tone="warning">

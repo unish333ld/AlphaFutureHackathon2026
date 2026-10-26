@@ -2,6 +2,10 @@
 
 [Выбранный стек](stack.md). Источник API — Django/DRF-аннотации; [openapi.yaml](openapi.yaml) генерируется с валидацией. Подсказки действий не заменяют проверку прав и состояния в транзакционных сервисах.
 
+API 1.2.0 добавляет `Product.catalog_reference`, `Application.readiness`, `Offer.cost_breakdown/comparison` и `Agreement.cost_breakdown`. Калькулятор принимает product вместо annual_rate для цены каталога. Форматы, источники и совместимость старых снимков — [product-research.md](product-research.md). Все суммы/итоги приходят с сервера; заполненность не является скорингом.
+
+API **1.3.0** развивает этот контракт: приватные PDF/metadata, nullable Agreement.confirmation, документы original/signed_copy, обязательная кодовая попытка на прежнем sign endpoint. Старый hash-only sign больше не работает. Пошаговая интеграция/ошибки/миграция frontend — [agreements.md](agreements.md). Readiness теперь отдельно сообщает verification_state (not_checked/pending/checked/needs_information/technical_error/outdated), checked_at; некорректный показатель имеет state=invalid, не ready.
+
 Необязательный помощник Савелий добавляет только `/assistant/conversations/` и сообщения к ним; кредитные endpoints и `available_actions` не заменены. Различать `expected_version` диалога и `application_version`/`lock_version` заявки. Подтверждение предложения полей и обработка неопределённого ответа: [assistant.md](assistant.md).
 
 ## Экран сотрудника → API → поля → действия → ограничения

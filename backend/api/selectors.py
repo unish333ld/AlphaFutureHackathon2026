@@ -1,5 +1,6 @@
 from django.db.models import OuterRef, Prefetch, Subquery
 
+from agreements.models import AgreementDocument
 from applications.models import Application, ApplicationRevision
 from common.access import company_scope
 
@@ -12,8 +13,16 @@ def application_queryset(user, *, detail=True):
         revisions = (
             ApplicationRevision.objects.select_related(
                 "assessment__decision__offer__agreement__disbursement",
+                "assessment__decision__offer__agreement__confirmation",
             )
-            .prefetch_related("checks", "information_requests")
+            .prefetch_related(
+                "checks",
+                "information_requests",
+                Prefetch(
+                    "assessment__decision__offer__agreement__documents",
+                    queryset=AgreementDocument.objects.defer("pdf_data", "snapshot"),
+                ),
+            )
             .order_by("-revision_no")
         )
         queryset = queryset.prefetch_related(Prefetch("revisions", queryset=revisions))

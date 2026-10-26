@@ -30,6 +30,7 @@ class CreditProduct(CreatedModel):
         validators=[MinValueValidator(0), MaxValueValidator(100)],
     )
     rules_version = models.CharField("Версия правил", max_length=32, default="demo-1")
+    catalog_reference = models.JSONField("Публичный ориентир и допущения", null=True, blank=True)
     active = models.BooleanField("Доступен для заявок", default=True)
 
     class Meta:

@@ -123,6 +123,21 @@ TERMS_SNAPSHOT = obj(
         "signature_mode": {"type": "string", "enum": ["simulation"]},
     }
 )
+# Additive extensions: legacy submitted revisions and agreement hashes stay valid.
+SUBMITTED_SNAPSHOT["properties"]["product"]["properties"]["catalog_reference"] = {
+    "allOf": [{"$ref": "#/components/schemas/CatalogReference"}],
+    "nullable": True,
+}
+TERMS_SNAPSHOT["properties"].update(
+    {
+        "cost_breakdown": {"$ref": "#/components/schemas/CostBreakdown"},
+        "catalog_version": STRING,
+        "product_name": STRING,
+        "purpose": STRING,
+        "parties": obj({"company": SUBMITTED_SNAPSHOT["properties"]["company"]}),
+    }
+)
+SUBMITTED_SNAPSHOT["properties"]["product"]["properties"]["name"] = STRING
 EVENT_DETAILS = obj(
     {
         "schema_version": VERSION,
@@ -134,6 +149,9 @@ EVENT_DETAILS = obj(
         "disbursement_id": UUID,
         "is_simulated": {"type": "boolean", "enum": [True]},
         "signature_mode": {"type": "string", "enum": ["simulation"]},
+        "confirmation_id": UUID,
+        "document_id": UUID,
+        "pdf_sha256": STRING,
         "assigned_to": UUID,
         "reason": {"type": "string", "enum": ["manual", "terminal_state"]},
     },

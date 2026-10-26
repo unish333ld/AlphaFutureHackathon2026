@@ -23,6 +23,7 @@ from common.access import company_scope, require_specialist
 from common.exceptions import Conflict, exception_handler
 from companies.models import Company
 from offers.models import Offer
+from tests.signing import sign_with_code
 
 
 def revision_data(app):
@@ -177,7 +178,7 @@ def test_signing_replay_and_direct_deadline_enforcement(demo, agreement):
     Offer.objects.filter(pk=agreement.offer_id).update(
         sign_before=timezone.now() + timedelta(days=1)
     )
-    deals.sign_agreement(demo["client"], agreement.id, app.lock_version, agreement.document_hash)
+    sign_with_code(demo["client"], agreement.id, app.lock_version, agreement.document_hash)
     app.refresh_from_db()
     with pytest.raises(Conflict):
         deals.sign_agreement(

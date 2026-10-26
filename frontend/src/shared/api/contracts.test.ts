@@ -235,4 +235,20 @@ describe("session API transport", () => {
       ),
     ).toThrow();
   });
+  it("rejects the obsolete generic sign path before making any request", () => {
+    const fetcher = vi.fn();
+    vi.stubGlobal("fetch", fetcher);
+    expect(() =>
+      api.action(
+        {
+          action: "sign_agreement",
+          allowed: true,
+          target_id: "00000000-0000-4000-8000-000000000001",
+          reason_code: null,
+        },
+        7,
+      ),
+    ).toThrow();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
 });

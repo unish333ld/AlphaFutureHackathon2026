@@ -1,0 +1,25 @@
+@font-face { font-family: Contract; src: url('{{ regular_font }}'); font-weight: normal; }
+@font-face { font-family: Contract; src: url('{{ bold_font }}'); font-weight: bold; }
+@page {
+  size: A4;
+  margin: 20mm 15mm 20mm 30mm;
+  @top-center { content: counter(page); font: 10pt Contract; vertical-align: middle; }
+  @bottom-center { content: 'Учебный документ. Не является банковским договором'; font: 8pt Contract; }
+}
+@page:first { @top-center { content: none; } }
+body { font-family: Contract, serif; font-size: 12pt; line-height: 1.2; color: #000; background: #fff; }
+h1 { font-size: 14pt; text-align: center; margin: 0 0 5mm; }
+h2 { font-size: 12pt; text-align: center; break-after: avoid; margin: 6mm 0 3mm; }
+p { text-align: justify; text-indent: 12.5mm; margin: 0 0 2.5mm; orphans: 3; widows: 3; overflow-wrap: break-word; }
+.requisites { text-indent: 0; text-align: left; overflow-wrap: anywhere; }
+.small { font-size: 9pt; }
+.hash { font-size: 8pt; overflow-wrap: anywhere; word-break: break-all; }
+.appendix { break-before: page; }
+table { width: 100%; border-collapse: collapse; font-size: 9pt; table-layout: fixed; }
+thead { display: table-header-group; }
+tfoot { display: table-row-group; }
+tr { break-inside: avoid; }
+th, td { border: 0.2mm solid #000; padding: 2mm 1mm; vertical-align: top; overflow-wrap: break-word; }
+td { text-align: right; }
+th:first-child, td:first-child { width: 8%; text-align: center; }
+.confirmation { border: 0.3mm solid #000; padding: 3mm; margin-top: 5mm; break-inside: avoid; }

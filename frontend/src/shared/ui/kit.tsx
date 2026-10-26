@@ -18,6 +18,16 @@ import type { Status } from "../api/client";
 import s from "./kit.module.css";
 
 export { Button, Input, Checkbox, Textarea };
+
+function DialogCloseIcon({ className }: { className?: string }) {
+  // The Core closer button already has an accessible name. Its icon is decorative.
+  return (
+    <span className={className} aria-hidden="true">
+      ×
+    </span>
+  );
+}
+
 export function Choice({
   label,
   value,
@@ -128,6 +138,19 @@ export function Dialog({
       onUnmount={() => {
         if (returnFocusRef)
           requestAnimationFrame(() => {
+            // A subsequent dialog may already be open (review → code → result).
+            // Never restore focus behind it or trigger its interaction pause.
+            const activeDialog = document.querySelector<HTMLElement>(
+              '[role="dialog"][aria-modal="true"]',
+            );
+            if (activeDialog) {
+              if (!activeDialog.contains(document.activeElement)) {
+                const target =
+                  activeDialog.querySelector<HTMLElement>("[data-autofocus]");
+                (target ?? activeDialog).focus({ preventScroll: true });
+              }
+              return;
+            }
             const target = returnFocusRef.current;
             if (target?.isConnected) target.focus({ preventScroll: true });
             else
@@ -137,6 +160,7 @@ export function Dialog({
           });
       }}
       hasCloser={!busy}
+      disableRestoreFocus={!!returnFocusRef}
       disableEscapeKeyDown={busy}
       disableBackdropClick={busy}
       wrapperProps={{
@@ -145,7 +169,7 @@ export function Dialog({
         "aria-modal": true,
       }}
     >
-      <Modal.Header>
+      <Modal.Header hasCloser={!busy} closerIcon={DialogCloseIcon}>
         <h2 id={id} className={s.dialogTitle}>
           {title}
         </h2>

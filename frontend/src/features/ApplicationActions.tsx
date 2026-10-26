@@ -7,11 +7,12 @@ import {
   api,
   type Action,
   type ActionName,
-  type Agreement,
   type Application,
 } from "../shared/api/client";
 import { ApiError } from "../shared/api/errors";
 import { beginIntent, clearIntent, readIntent } from "../shared/api/intent";
+import { CreditCost } from "./CreditDisclosure";
+import { AgreementSigning } from "./AgreementSigning";
 import {
   actionFor,
   actionLabels,
@@ -23,7 +24,6 @@ import {
 } from "../entities/credit";
 import {
   Button,
-  Checkbox,
   Dialog,
   ErrorNotice,
   Facts,
@@ -39,7 +39,6 @@ type Confirmation = {
   action: Action;
   version: number;
   app: Application;
-  agreement?: Agreement;
 };
 const questionSchema = z
   .string()
@@ -57,10 +56,10 @@ export function ApplicationActions({
   const refresh = useRefreshCredit();
   const staff = user?.system_role === "specialist";
   const trigger = useRef<HTMLButtonElement | null>(null);
+  const dispatching = useRef(false);
   const [dialog, setDialog] = useState<Confirmation | null>(null);
   const [question, setQuestion] = useState("");
   const [questionError, setQuestionError] = useState("");
-  const [confirmSign, setConfirmSign] = useState(false);
   const [discardQuestion, setDiscardQuestion] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const cooldown = useRetryCooldown(error);
@@ -95,12 +94,7 @@ export function ApplicationActions({
           confirmation.version,
           action.action === "request_information"
             ? { question: question.trim() }
-            : action.action === "sign_agreement"
-              ? {
-                  document_hash: confirmation.agreement?.document_hash,
-                  confirm_simulation: true,
-                }
-              : {},
+            : {},
           key,
         );
         if (action.action === "disburse" && user && action.target_id) {
@@ -109,16 +103,13 @@ export function ApplicationActions({
         }
         setDialog(null);
         setQuestion("");
-        setConfirmSign(false);
         await refresh();
         setMessage(
           action.action === "disburse"
             ? "Моделируемая выдача подтверждена сервером."
-            : action.action === "sign_agreement"
-              ? "Условная подпись сохранена. Ожидается действие банка."
-              : action.action === "decide"
-                ? "Решение по серверным правилам готово. Результат показан в карточке."
-                : "Изменения сохранены сервером.",
+            : action.action === "decide"
+              ? "Решение по серверным правилам готово. Результат показан в карточке."
+              : "Изменения сохранены сервером.",
         );
       } catch (cause) {
         setError(cause);
@@ -145,14 +136,24 @@ export function ApplicationActions({
     },
   });
   const pending = mutation.isPending || preparing;
+  function dispatch(confirmation: Confirmation) {
+    // React can batch both click handlers before isPending reaches the button.
+    if (dispatching.current) return;
+    dispatching.current = true;
+    mutation.mutate(confirmation, {
+      onSettled: () => {
+        dispatching.current = false;
+      },
+    });
+  }
   async function open(name: ActionName) {
-    if (pending || cooldown) return;
+    if (dispatching.current || pending || cooldown) return;
     const original = actionFor(app, name);
     if (!original?.allowed || !original.target_id) return;
     setError(null);
     setMessage("");
     if (["claim", "release", "retry_checks"].includes(name)) {
-      mutation.mutate({ action: original, version: app.lock_version, app });
+      dispatch({ action: original, version: app.lock_version, app });
       return;
     }
     setPreparing(true);
@@ -167,18 +168,12 @@ export function ApplicationActions({
             reasons[action?.reason_code ?? ""] ??
             "Действие больше недоступно. Проверьте карточку.",
         });
-      const contract =
-        name === "sign_agreement"
-          ? await api.agreement(action.target_id)
-          : undefined;
-      setConfirmSign(false);
       setQuestionError("");
       setDiscardQuestion(false);
       setDialog({
         action,
         version: fresh.lock_version,
         app: fresh,
-        agreement: contract,
       });
     } catch (cause) {
       setError(cause);
@@ -187,7 +182,7 @@ export function ApplicationActions({
     }
   }
   function close() {
-    if (pending) return;
+    if (dispatching.current || pending) return;
     if (
       dialog?.action.action === "request_information" &&
       question.trim() &&
@@ -209,7 +204,6 @@ export function ApplicationActions({
       (error instanceof ApiError && error.status === 409)
     )
       return;
-    if (dialog.action.action === "sign_agreement" && !confirmSign) return;
     if (dialog.action.action === "request_information") {
       const parsed = questionSchema.safeParse(question);
       if (!parsed.success) {
@@ -217,7 +211,7 @@ export function ApplicationActions({
         return;
       }
     }
-    mutation.mutate(dialog);
+    dispatch(dialog);
   }
   const clientNames: ActionName[] =
     app.status === "draft"
@@ -227,7 +221,7 @@ export function ApplicationActions({
         : app.status === "offered"
           ? ["accept_offer", "decline_offer", "revise"]
           : app.status === "accepted"
-            ? ["sign_agreement"]
+            ? []
             : app.status === "review"
               ? ["revise"]
               : app.status === "checking"
@@ -298,6 +292,13 @@ export function ApplicationActions({
         </Notice>
       ) : null}
       <div className={s.stack}>
+        {!staff && agreement ? (
+          <AgreementSigning
+            app={app}
+            reload={reload}
+            disabled={!actionFor(app, "sign_agreement")?.allowed}
+          />
+        ) : null}
         {available.map((action, index) => {
           const enabled = action.allowed && !!action.target_id;
           const formPath =
@@ -374,8 +375,7 @@ export function ApplicationActions({
                 disabled={
                   pending ||
                   cooldown > 0 ||
-                  (error instanceof ApiError && error.status === 409) ||
-                  (dialog?.action.action === "sign_agreement" && !confirmSign)
+                  (error instanceof ApiError && error.status === 409)
                 }
               >
                 {dialog?.action.action === "decide"
@@ -434,63 +434,27 @@ export function ApplicationActions({
                     : "Предложение будет отклонено, а заявка завершена. Это действие нельзя отменить в текущем процессе."}
                 </p>
                 {targetOffer ? (
-                  <Facts
-                    rows={[
-                      { label: "Сумма", value: money(targetOffer.amount) },
-                      { label: "Ставка", value: rate(targetOffer.annual_rate) },
-                      {
-                        label: "Срок",
-                        value: `${targetOffer.term_months} мес.`,
-                      },
-                      {
-                        label: "Платёж",
-                        value: money(targetOffer.monthly_payment),
-                      },
-                    ]}
-                  />
+                  <>
+                    <Facts
+                      rows={[
+                        { label: "Сумма", value: money(targetOffer.amount) },
+                        {
+                          label: "Ставка",
+                          value: rate(targetOffer.annual_rate),
+                        },
+                        {
+                          label: "Срок",
+                          value: `${targetOffer.term_months} мес.`,
+                        },
+                        {
+                          label: "Платёж",
+                          value: money(targetOffer.monthly_payment),
+                        },
+                      ]}
+                    />
+                    <CreditCost value={targetOffer.cost_breakdown} />
+                  </>
                 ) : null}
-              </>
-            ) : null}
-            {dialog?.action.action === "sign_agreement" && dialog.agreement ? (
-              <>
-                <p>
-                  Договор {dialog.agreement.number}. Подписываются именно
-                  прочитанные условия:
-                </p>
-                <Facts
-                  rows={[
-                    {
-                      label: "Сумма",
-                      value: money(dialog.agreement.terms_snapshot.amount),
-                    },
-                    {
-                      label: "Ставка",
-                      value: rate(dialog.agreement.terms_snapshot.annual_rate),
-                    },
-                    {
-                      label: "Срок",
-                      value: `${dialog.agreement.terms_snapshot.term_months} мес.`,
-                    },
-                    {
-                      label: "Платёж",
-                      value: money(
-                        dialog.agreement.terms_snapshot.monthly_payment,
-                      ),
-                    },
-                  ]}
-                />
-                <p className={s.muted}>
-                  SHA-256:{" "}
-                  <code style={{ overflowWrap: "anywhere" }}>
-                    {dialog.agreement.document_hash}
-                  </code>
-                </p>
-                <Checkbox
-                  label="Подтверждаю условное подписание. Это демонстрация, а не юридически значимая электронная подпись"
-                  checked={confirmSign}
-                  onChange={(_, { checked }) => setConfirmSign(checked)}
-                  block
-                />
               </>
             ) : null}
             {dialog?.action.action === "disburse" ? (

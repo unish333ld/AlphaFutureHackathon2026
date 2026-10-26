@@ -19,7 +19,7 @@ test("permission denied, safe 429/503 handling and no automatic mutation retries
     await showApp(accountant.page, app);
     await expect(
       accountant.page.getByRole("button", {
-        name: "Условно подписать",
+        name: "Подписать договор",
         exact: true,
       }),
     ).toBeDisabled();

@@ -162,13 +162,66 @@ export async function signed(client: BrowserContext, staff: BrowserContext) {
   app = await post(client, `offers/${offer.id}/accept/`, {
     lock_version: app.lock_version,
   });
+  await signWithDemoCode(client, app);
+  return getApp(client, app.id);
+}
+export async function signWithDemoCode(
+  client: BrowserContext,
+  app: Application,
+) {
   const agreement = currentOffer(app)!.agreement!;
+  const document = await post<Schema["AgreementDocument"]>(
+    client,
+    `agreements/${agreement.id}/generate-document/`,
+    { lock_version: app.lock_version, document_hash: agreement.document_hash },
+  );
+  const attempt = await post<Schema["SignatureAttempt"]>(
+    client,
+    `agreements/${agreement.id}/signature-attempt/`,
+    {
+      lock_version: app.lock_version,
+      document_hash: agreement.document_hash,
+      document_id: document.id,
+      pdf_sha256: document.pdf_sha256,
+      acknowledged: true,
+      confirm_simulation: true,
+    },
+  );
   await post<Schema["Agreement"]>(client, `agreements/${agreement.id}/sign/`, {
     lock_version: app.lock_version,
     document_hash: agreement.document_hash,
     confirm_simulation: true,
+    document_id: document.id,
+    pdf_sha256: document.pdf_sha256,
+    attempt_id: attempt.id,
+    code: attempt.demo_code,
   });
-  return getApp(client, app.id);
+}
+export async function uiSign(page: Page) {
+  await page
+    .getByRole("button", { name: "Подписать договор", exact: true })
+    .click();
+  const review = page.getByRole("dialog", {
+    name: "Просмотр договора",
+    exact: true,
+  });
+  await expect(
+    review.getByRole("button", { name: "Подписать договор", exact: true }),
+  ).toBeDisabled();
+  await review.getByRole("checkbox").press("Space");
+  await review
+    .getByRole("button", { name: "Подписать договор", exact: true })
+    .click();
+  const success = page.getByRole("dialog", {
+    name: "Договор подписан в демо-режиме",
+    exact: true,
+  });
+  await expect(success).toBeVisible();
+  await expect(success).toContainText(
+    "Ожидается моделируемая выдача специалистом",
+  );
+  await success.getByRole("button", { name: "Закрыть", exact: true }).click();
+  await expect(success).toHaveCount(0);
 }
 export async function showApp(page: Page, app: Application, staff = false) {
   await page.goto(`${staff ? "/staff/applications/" : "/app/loans/"}${app.id}`);
@@ -182,9 +235,10 @@ export async function uiAction(
   confirm = "Подтвердить",
 ) {
   await page.getByRole("button", { name, exact: true }).click();
-  await page
-    .getByRole("dialog")
-    .getByRole("button", { name: confirm, exact: true })
-    .click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  const dialog = page.getByRole("dialog", {
+    name: name === "Повторить с тем же ключом" ? "Моделировать выдачу" : name,
+    exact: true,
+  });
+  await dialog.getByRole("button", { name: confirm, exact: true }).click();
+  await expect(dialog).toHaveCount(0);
 }

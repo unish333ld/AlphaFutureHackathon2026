@@ -7,7 +7,9 @@ addopts = "-q"
 [tool.coverage.run]
 source = ["backend"]
 branch = true
-omit = ["*/migrations/*", "*/tests/*", "backend/manage.py", "backend/config/wsgi.py"]
+# Include the real bounded PDF worker, not just its parent request handler.
+patch = ["subprocess"]
+omit = ["*/migrations/*", "*/tests/*", "*/backend/manage.py", "*/backend/config/wsgi.py"]
 
 [tool.coverage.report]
 show_missing = true

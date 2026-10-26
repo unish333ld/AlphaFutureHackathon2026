@@ -8,6 +8,7 @@ from applications.models import Application
 from companies.models import Company
 from offers.models import Offer
 from products.models import CreditProduct
+from tests.signing import signing_payload
 
 
 def request(api, user, method, path, data=None, expected=200, **headers):
@@ -71,7 +72,7 @@ def test_create_and_update_draft_persist_with_versioned_event(demo, api):
         demo["client"],
         "patch",
         f"applications/{created.id}/",
-        {"lock_version": 1, "amount": "9999999.00"},
+        {"lock_version": 1, "amount": "30000000.01"},
         expected=400,
     )
     revision.refresh_from_db()
@@ -102,10 +103,10 @@ def test_create_rejects_foreign_company_and_ineligible_product(demo, api):
 @pytest.mark.parametrize(
     "changes",
     [
-        {"amount": "99999.99"},
-        {"amount": "5000000.01"},
-        {"term_months": 5},
-        {"term_months": 37},
+        {"amount": "299999.99"},
+        {"amount": "30000000.01"},
+        {"term_months": 11},
+        {"term_months": 61},
         {"monthly_revenue": "-0.01"},
         {"term_months": 24, "admin": True},
     ],
@@ -247,6 +248,7 @@ def test_sign_rejects_database_tampering_of_frozen_terms(demo, api):
     )
     agreement_data = result.data["revisions"][0]["assessment"]["decision"]["offer"]["agreement"]
     agreement = Agreement.objects.get(pk=agreement_data["id"])
+    payload = signing_payload(demo["client"], agreement, result.data["lock_version"])
     changed_terms = {**agreement.terms_snapshot, "amount": "1.00"}
     Agreement.objects.filter(pk=agreement.pk).update(terms_snapshot=changed_terms)
 
@@ -255,11 +257,7 @@ def test_sign_rejects_database_tampering_of_frozen_terms(demo, api):
         demo["client"],
         "post",
         f"agreements/{agreement.id}/sign/",
-        {
-            "lock_version": result.data["lock_version"],
-            "document_hash": agreement.document_hash,
-            "confirm_simulation": True,
-        },
+        payload,
         expected=409,
     )
     agreement.refresh_from_db()
@@ -301,11 +299,7 @@ def test_disbursement_requires_valid_idempotency_uuid_and_matches_frozen_amount(
         demo["client"],
         "post",
         f"agreements/{agreement_data['id']}/sign/",
-        {
-            "lock_version": result.data["lock_version"],
-            "document_hash": agreement_data["document_hash"],
-            "confirm_simulation": True,
-        },
+        signing_payload(demo["client"], agreement_data, result.data["lock_version"]),
     )
     app.refresh_from_db()
     request(

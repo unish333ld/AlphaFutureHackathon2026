@@ -9,6 +9,7 @@ from agreements.models import Agreement
 from applications import services
 from applications.models import Application
 from offers.models import Offer
+from tests.signing import sign_with_code
 
 
 @pytest.fixture(autouse=True)
@@ -83,7 +84,7 @@ def signed_deal_factory(demo):
         deals.respond_to_offer(demo["client"], offer.id, app.lock_version, accept=True)
         agreement = Agreement.objects.get(offer=offer)
         app.refresh_from_db()
-        return deals.sign_agreement(
+        return sign_with_code(
             demo["client"], agreement.id, app.lock_version, agreement.document_hash
         )
 

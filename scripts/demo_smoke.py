@@ -250,6 +250,26 @@ def run(base_url, password, verify_application=None):
             )
             agreement = accepted["revisions"][0]["assessment"]["decision"]["offer"]["agreement"]
             agreement_path = f"/api/v1/agreements/{agreement['id']}/"
+            document = client.request(
+                "POST",
+                agreement_path + "generate-document/",
+                {
+                    "lock_version": accepted["lock_version"],
+                    "document_hash": agreement["document_hash"],
+                },
+            )
+            attempt = client.request(
+                "POST",
+                agreement_path + "signature-attempt/",
+                {
+                    "lock_version": accepted["lock_version"],
+                    "document_hash": agreement["document_hash"],
+                    "document_id": document["id"],
+                    "pdf_sha256": document["pdf_sha256"],
+                    "acknowledged": True,
+                    "confirm_simulation": True,
+                },
+            )
             client.request(
                 "POST",
                 agreement_path + "sign/",
@@ -257,6 +277,10 @@ def run(base_url, password, verify_application=None):
                     "lock_version": accepted["lock_version"],
                     "document_hash": agreement["document_hash"],
                     "confirm_simulation": True,
+                    "document_id": document["id"],
+                    "pdf_sha256": document["pdf_sha256"],
+                    "attempt_id": attempt["id"],
+                    "code": attempt["demo_code"],
                 },
             )
             version = client.request("GET", app_path)["lock_version"]

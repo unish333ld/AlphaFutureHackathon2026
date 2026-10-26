@@ -10,6 +10,7 @@ import {
   signed,
   showApp,
   uiAction,
+  uiSign,
 } from "./fixtures";
 import { currentOffer, currentRevision } from "../../src/entities/credit";
 
@@ -124,22 +125,7 @@ test("real UI: create → claim → clarification revision → server decision �
     app = await getApp(client.context, id);
     await showApp(client.page, app);
     await uiAction(client.page, "Принять предложение");
-    await client.page
-      .getByRole("button", { name: "Условно подписать", exact: true })
-      .click();
-    await expect(
-      client.page
-        .getByRole("dialog")
-        .getByRole("button", { name: "Подтвердить", exact: true }),
-    ).toBeDisabled();
-    await client.page
-      .getByLabel(/Подтверждаю условное подписание/)
-      .press("Space");
-    await client.page
-      .getByRole("dialog")
-      .getByRole("button", { name: "Подтвердить", exact: true })
-      .click();
-    await expect(client.page.getByRole("dialog")).toHaveCount(0);
+    await uiSign(client.page);
     await expect(
       client.page.getByRole("button", {
         name: "Моделировать выдачу",
@@ -526,20 +512,33 @@ test("responsive layouts, keyboard dialogs, accessibility, empty states and AI a
         .toBeTruthy();
     }
     await client.page.goto("/app");
-    await expect(
-      client.page.getByRole("button", { name: "Савелий", exact: true }),
-    ).toBeVisible();
-    await client.page
-      .getByRole("button", { name: "Савелий", exact: true })
-      .click();
-    await expect(
-      client.page.getByRole("dialog", { name: "Савелий, помощник по кредиту" }),
-    ).toBeVisible();
-    await client.page.keyboard.press("Escape");
-    await expect(client.page.getByRole("dialog")).toHaveCount(0);
-    await expect(
-      client.page.getByRole("button", { name: "Савелий", exact: true }),
-    ).toBeFocused();
+    if (process.env.E2E_ASSISTANT_ENABLED === "false") {
+      await expect(
+        client.page.getByRole("button", { name: "Савелий", exact: true }),
+      ).toHaveCount(0);
+      await expect(
+        client.page.getByRole("dialog", {
+          name: "Савелий, помощник по кредиту",
+        }),
+      ).toHaveCount(0);
+    } else {
+      await expect(
+        client.page.getByRole("button", { name: "Савелий", exact: true }),
+      ).toBeVisible();
+      await client.page
+        .getByRole("button", { name: "Савелий", exact: true })
+        .click();
+      await expect(
+        client.page.getByRole("dialog", {
+          name: "Савелий, помощник по кредиту",
+        }),
+      ).toBeVisible();
+      await client.page.keyboard.press("Escape");
+      await expect(client.page.getByRole("dialog")).toHaveCount(0);
+      await expect(
+        client.page.getByRole("button", { name: "Савелий", exact: true }),
+      ).toBeFocused();
+    }
     await expect(
       staff.page.getByRole("button", { name: "Савелий", exact: true }),
     ).toHaveCount(0);

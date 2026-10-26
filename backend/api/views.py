@@ -1,5 +1,5 @@
 from django.db import DatabaseError, connection
-from django.db.models import F, Q
+from django.db.models import F, Prefetch, Q
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import (
     OpenApiExample,
@@ -14,7 +14,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from agreements import services as deal
-from agreements.models import Agreement, Disbursement
+from agreements.models import Agreement, AgreementDocument, Disbursement
+from api.agreement_documents import AgreementDocumentsMixin
 from api.selectors import application_queryset, staff_queue_queryset
 from api.serializers import (
     AgreementSerializer,
@@ -45,6 +46,7 @@ from companies.models import Company
 from offers.models import Offer
 from products.calculations import payment_schedule
 from products.models import CreditProduct
+from products.presentation import cost_breakdown
 
 ACTION_RESPONSES = {
     200: ApplicationSerializer,
@@ -110,7 +112,7 @@ class CalculatorView(APIView):
         request=PaymentRequestSerializer,
         responses=PaymentResponseSerializer,
         summary="Предварительный аннуитетный расчёт",
-        description="Демо: равные месячные периоды, без комиссий. Итоговый последний платёж корректирует округление. Не является кредитным предложением.",
+        description="Учебный аннуитет и подробная стоимость: равные месячные периоды, комиссии/услуги исключены политикой демо. Передайте product: ставка и границы берутся с сервера. Альтернатива — annual_rate для самостоятельного расчёта, не банковского предложения. Последний платёж корректирует округление; юридическая ПСК не рассчитывается.",
         examples=[
             OpenApiExample(
                 "Пример",
@@ -122,9 +124,25 @@ class CalculatorView(APIView):
     def post(self, request):
         serializer = PaymentRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        payment, schedule = payment_schedule(**serializer.validated_data)
+        data = dict(serializer.validated_data)
+        product_id = data.pop("product", None)
+        product = None
+        if product_id:
+            product = get_object_or_404(CreditProduct, pk=product_id, active=True)
+            services.validate_terms(data, product)
+            data["annual_rate"] = product.annual_rate
+        payment, schedule = payment_schedule(**data)
         return Response(
-            PaymentResponseSerializer({"monthly_payment": payment, "schedule": schedule}).data
+            PaymentResponseSerializer(
+                {
+                    "monthly_payment": payment,
+                    "schedule": schedule,
+                    "annual_rate": data["annual_rate"],
+                    "catalog_version": product.rules_version if product else None,
+                    "rate_source": "demo_assumption" if product else "custom_calculation",
+                    "cost_breakdown": cost_breakdown(data["amount"], schedule),
+                }
+            ).data
         )
 
 
@@ -429,7 +447,12 @@ class OfferViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         queryset = Offer.objects.select_related(
-            "decision__assessment__revision", "agreement__disbursement"
+            "decision__assessment__revision", "agreement__disbursement", "agreement__confirmation"
+        ).prefetch_related(
+            Prefetch(
+                "agreement__documents",
+                queryset=AgreementDocument.objects.defer("pdf_data", "snapshot"),
+            )
         )
         if getattr(self, "swagger_fake_view", False):
             return queryset.none()
@@ -481,13 +504,15 @@ class OfferViewSet(viewsets.ReadOnlyModelViewSet):
     list=extend_schema(tags=["Договоры"], summary="Доступные демо-договоры"),
     retrieve=extend_schema(tags=["Договоры"], summary="Зафиксированные условия и SHA-256"),
 )
-class AgreementViewSet(viewsets.ReadOnlyModelViewSet):
+class AgreementViewSet(AgreementDocumentsMixin, viewsets.ReadOnlyModelViewSet):
     queryset = Agreement.objects.none()
     serializer_class = AgreementSerializer
 
     def get_queryset(self):
         queryset = Agreement.objects.select_related(
-            "offer__decision__assessment__revision", "disbursement"
+            "offer__decision__assessment__revision", "disbursement", "confirmation"
+        ).prefetch_related(
+            Prefetch("documents", queryset=AgreementDocument.objects.defer("pdf_data", "snapshot"))
         )
         if getattr(self, "swagger_fake_view", False):
             return queryset.none()
@@ -507,7 +532,7 @@ class AgreementViewSet(viewsets.ReadOnlyModelViewSet):
             409: ErrorSerializer,
         },
         summary="Условно подписать принятую версию договора",
-        description="Требует can_sign, document_hash и confirm_simulation=true; назначение специалиста не ограничивает клиента. Срок подписи — sign_before. Юридически значимая электронная подпись не выполняется. После успеха GET /api/v1/applications/{application_id}/ возвращает новый lock_version; application_id есть у предложения.",
+        description="Единственный маршрут подписи: can_sign, актуальные lock_version/document_hash, document_id/pdf_sha256 просмотренного PDF, pending attempt_id, одноразовый code и confirm_simulation=true. Старый hash-only запрос больше не подписывает (400). Ошибки кода учитываются, после пяти попытка блокируется. Код не является ЭП/SMS; назначение не ограничивает клиента. После успеха перечитайте карточку: signed, новый lock_version, но ещё не issued. Копия с отметкой создаётся отдельным signed-document, её ошибка не повторяет подпись.",
     )
     @action(detail=True, methods=["post"])
     def sign(self, request, pk=None):
@@ -519,7 +544,14 @@ class AgreementViewSet(viewsets.ReadOnlyModelViewSet):
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
         result = deal.sign_agreement(
-            request.user, agreement.id, data["lock_version"], data["document_hash"]
+            request.user,
+            agreement.id,
+            data["lock_version"],
+            data["document_hash"],
+            attempt_id=data["attempt_id"],
+            document_id=data["document_id"],
+            pdf_sha256=data["pdf_sha256"],
+            code=data["code"],
         )
         return Response(AgreementSerializer(result).data)
 

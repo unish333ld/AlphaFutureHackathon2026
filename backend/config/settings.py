@@ -108,6 +108,8 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 262144
 LOGIN_REDIRECT_URL = "/api/docs/"
 LOGOUT_REDIRECT_URL = "/api/docs/"
 DEMO_MODE = os.getenv("DEMO_MODE", "false").lower() == "true"
+DEMO_SIGNATURE_ENABLED = os.getenv("DEMO_SIGNATURE_ENABLED", "true").lower() == "true"
+PDF_RENDER_TIMEOUT_SECONDS = 15
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": ["rest_framework.authentication.SessionAuthentication"],
@@ -154,7 +156,7 @@ SPECTACULAR_SETTINGS = {
         "Swagger передаёт session cookie и X-CSRFToken автоматически. "
         "Изменяющие действия требуют актуальный lock_version из карточки заявки."
     ),
-    "VERSION": "1.1.0",
+    "VERSION": "1.3.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "COMPONENT_SPLIT_REQUEST": True,
     "SWAGGER_UI_DIST": "SIDECAR",
@@ -166,6 +168,7 @@ SPECTACULAR_SETTINGS = {
         "persistAuthorization": False,
     },
     "ENUM_NAME_OVERRIDES": {
+        "DemoAssumptionEnum": ["demo_assumption"],
         "ApplicationStatusEnum": "applications.models.Application.Status",
         "OfferStatusEnum": "offers.models.Offer.Status",
         "CheckStatusEnum": "checks.models.CheckResult.Status",

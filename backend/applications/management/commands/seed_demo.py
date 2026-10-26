@@ -11,6 +11,7 @@ from django.db import transaction
 from accounts.models import User
 from applications.services import create_application
 from companies.models import Company, CompanyMember
+from products.catalog import product_defaults
 from products.models import CreditProduct
 
 
@@ -48,29 +49,11 @@ class Command(BaseCommand):
             users[username] = user
         product, _ = CreditProduct.objects.get_or_create(
             code="working-capital",
-            defaults={
-                "id": uuid.UUID(int=101),
-                "name": "Оборотные средства · демо",
-                "description": "Синтетический продукт. Условия не являются предложением банка.",
-                "min_amount": Decimal("100000"),
-                "max_amount": Decimal("5000000"),
-                "min_term_months": 6,
-                "max_term_months": 36,
-                "annual_rate": Decimal("18.0000"),
-            },
+            defaults={"id": uuid.UUID(int=101), **product_defaults("working-capital")},
         )
         CreditProduct.objects.get_or_create(
             code="equipment",
-            defaults={
-                "id": uuid.UUID(int=102),
-                "name": "Покупка оборудования · демо",
-                "description": "Синтетический продукт для оборудования, без оценки реального залога.",
-                "min_amount": Decimal("200000"),
-                "max_amount": Decimal("10000000"),
-                "min_term_months": 12,
-                "max_term_months": 60,
-                "annual_rate": Decimal("16.0000"),
-            },
+            defaults={"id": uuid.UUID(int=102), **product_defaults("equipment")},
         )
         scenarios = [
             (1, "Демо · Рост", "standard", "approval", "1500000", "900000", "50000"),

@@ -21,6 +21,7 @@ from common.exceptions import Conflict
 from companies.models import CompanyMember
 from decisions.models import Assessment, CreditDecision
 from offers.models import Offer
+from tests.signing import sign_with_code
 
 
 @pytest.fixture
@@ -118,7 +119,7 @@ def test_assignment_allows_documented_states(demo, api, status):
             app.refresh_from_db()
             if status == "signed":
                 agreement = offer.agreement
-                deals.sign_agreement(
+                sign_with_code(
                     demo["client"], agreement.pk, app.lock_version, agreement.document_hash
                 )
                 app.refresh_from_db()
@@ -246,7 +247,7 @@ def test_assignment_survives_information_and_client_accept_sign(
         == "capability_required"
     )
     app.refresh_from_db()
-    deals.sign_agreement(demo["client"], agreement.pk, app.lock_version, agreement.document_hash)
+    sign_with_code(demo["client"], agreement.pk, app.lock_version, agreement.document_hash)
     app.refresh_from_db()
     assert app.assigned_to_id == second_specialist.pk and app.status == "signed"
 

@@ -5,7 +5,7 @@ from rest_framework import serializers
 from rest_framework.settings import api_settings
 
 from accounts.models import User
-from agreements.models import Agreement, Disbursement
+from agreements.models import Agreement, AgreementDocument, Disbursement, SignatureConfirmation
 from api.contracts import (
     CheckResultField,
     EventDetailsField,
@@ -14,6 +14,12 @@ from api.contracts import (
     ScheduleField,
     TermsSnapshotField,
 )
+from api.product_serializers import (
+    ApplicationReadinessSerializer,
+    CatalogReferenceSerializer,
+    CostBreakdownSerializer,
+    OfferComparisonSerializer,
+)
 from applications.actions import ACTION_NAMES, REASON_CODES, available_actions, latest_revision
 from applications.models import (
     Application,
@@ -21,11 +27,13 @@ from applications.models import (
     ApplicationRevision,
     InformationRequest,
 )
+from applications.readiness import application_readiness
 from checks.models import CheckResult
 from companies.models import Company, CompanyMember
 from decisions.models import Assessment, CreditDecision
 from offers.models import Offer
 from products.models import CreditProduct
+from products.presentation import cost_breakdown, offer_comparison
 
 
 class StrictSerializer(serializers.Serializer):
@@ -146,6 +154,8 @@ class CompanySerializer(serializers.ModelSerializer):
 
 
 class ProductSerializer(serializers.ModelSerializer):
+    catalog_reference = CatalogReferenceSerializer(read_only=True, allow_null=True)
+
     class Meta:
         model = CreditProduct
         fields = [
@@ -159,6 +169,7 @@ class ProductSerializer(serializers.ModelSerializer):
             "max_term_months",
             "annual_rate",
             "rules_version",
+            "catalog_reference",
             "active",
         ]
         read_only_fields = fields
@@ -226,11 +237,69 @@ class SignRequestSerializer(VersionSerializer):
         r"\A[0-9a-f]{64}\Z", help_text="SHA-256 условий из GET договора."
     )
     confirm_simulation = serializers.BooleanField(help_text="Явное подтверждение условной подписи.")
+    document_id = serializers.UUIDField(help_text="Идентификатор просмотренного исходного PDF.")
+    pdf_sha256 = serializers.RegexField(
+        r"\A[0-9a-f]{64}\Z", help_text="Отдельный SHA-256 байтов PDF."
+    )
+    attempt_id = serializers.UUIDField()
+    code = serializers.RegexField(r"\A[0-9]{6}\Z", write_only=True, trim_whitespace=False)
 
     def validate_confirm_simulation(self, value):
         if not value:
             raise serializers.ValidationError("Нужно подтвердить условное подписание.")
         return value
+
+
+class DocumentGenerationRequestSerializer(VersionSerializer):
+    document_hash = serializers.RegexField(r"\A[0-9a-f]{64}\Z")
+
+
+class SignatureAttemptRequestSerializer(DocumentGenerationRequestSerializer):
+    document_id = serializers.UUIDField()
+    pdf_sha256 = serializers.RegexField(r"\A[0-9a-f]{64}\Z")
+    acknowledged = serializers.BooleanField(
+        help_text="Явно ознакомлен с условиями; открытие PDF это не заменяет."
+    )
+    confirm_simulation = serializers.BooleanField()
+
+    def validate(self, attrs):
+        if not attrs["acknowledged"] or not attrs["confirm_simulation"]:
+            raise serializers.ValidationError(
+                "Нужно явно подтвердить ознакомление и демонстрационный режим."
+            )
+        return attrs
+
+
+class CancelSignatureRequestSerializer(StrictSerializer):
+    attempt_id = serializers.UUIDField()
+
+
+class SignatureAttemptSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    document_id = serializers.UUIDField()
+    expires_at = serializers.DateTimeField()
+    state = serializers.ChoiceField(choices=["pending", "cancelled", "expired", "locked", "used"])
+    demo_code = serializers.CharField(
+        help_text="Только небезопасная для production симуляция. SMS не отправляется; это не второй фактор."
+    )
+    simulation = serializers.BooleanField()
+
+
+class AgreementDocumentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AgreementDocument
+        fields = [
+            "id",
+            "kind",
+            "version",
+            "template_version",
+            "calculator_version",
+            "terms_hash",
+            "pdf_sha256",
+            "source_document",
+            "created_at",
+        ]
+        read_only_fields = fields
 
 
 class DisbursementSerializer(serializers.ModelSerializer):
@@ -248,9 +317,41 @@ class DisbursementSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class SignatureConfirmationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SignatureConfirmation
+        fields = [
+            "id",
+            "document",
+            "attempt",
+            "user",
+            "company",
+            "confirmed_at",
+            "document_hash",
+            "pdf_sha256",
+            "mode",
+        ]
+        read_only_fields = fields
+
+
 class AgreementSerializer(serializers.ModelSerializer):
     disbursement = DisbursementSerializer(read_only=True, allow_null=True)
     terms_snapshot = TermsSnapshotField(read_only=True)
+    cost_breakdown = serializers.SerializerMethodField()
+    documents = serializers.SerializerMethodField()
+    confirmation = SignatureConfirmationSerializer(read_only=True, allow_null=True)
+
+    @extend_schema_field(AgreementDocumentSerializer(many=True))
+    def get_documents(self, obj):
+        cached = getattr(obj, "_prefetched_objects_cache", {}).get("documents")
+        documents = cached if cached is not None else obj.documents.defer("pdf_data", "snapshot")
+        return AgreementDocumentSerializer(documents, many=True).data
+
+    @extend_schema_field(CostBreakdownSerializer)
+    def get_cost_breakdown(self, obj):
+        return obj.terms_snapshot.get("cost_breakdown") or cost_breakdown(
+            obj.terms_snapshot["amount"], obj.terms_snapshot["schedule"]
+        )
 
     class Meta:
         model = Agreement
@@ -259,6 +360,9 @@ class AgreementSerializer(serializers.ModelSerializer):
             "offer",
             "number",
             "terms_snapshot",
+            "cost_breakdown",
+            "documents",
+            "confirmation",
             "document_hash",
             "signed_by",
             "signed_at",
@@ -272,6 +376,17 @@ class AgreementSerializer(serializers.ModelSerializer):
 class OfferSerializer(serializers.ModelSerializer):
     agreement = AgreementSerializer(read_only=True, allow_null=True)
     schedule = ScheduleField(read_only=True)
+    cost_breakdown = serializers.SerializerMethodField()
+    comparison = serializers.SerializerMethodField()
+
+    @extend_schema_field(CostBreakdownSerializer)
+    def get_cost_breakdown(self, obj):
+        return cost_breakdown(obj.amount, obj.schedule)
+
+    @extend_schema_field(OfferComparisonSerializer)
+    def get_comparison(self, obj):
+        return offer_comparison(obj)
+
     application_id = serializers.UUIDField(
         source="decision.assessment.revision.application_id", read_only=True
     )
@@ -288,6 +403,8 @@ class OfferSerializer(serializers.ModelSerializer):
             "term_months",
             "monthly_payment",
             "schedule",
+            "cost_breakdown",
+            "comparison",
             "status",
             "expires_at",
             "accepted_at",
@@ -413,6 +530,13 @@ class ApplicationSerializer(ApplicationListSerializer):
     assigned_to = SpecialistSummarySerializer(read_only=True, allow_null=True)
     current_revision_id = serializers.SerializerMethodField()
     available_actions = serializers.SerializerMethodField()
+    readiness = serializers.SerializerMethodField()
+
+    @extend_schema_field(ApplicationReadinessSerializer)
+    def get_readiness(self, obj):
+        return application_readiness(
+            obj, self.context["request"].user, actions=self.get_available_actions(obj)
+        )
 
     @extend_schema_field(serializers.UUIDField(allow_null=True))
     def get_current_revision_id(self, obj):
@@ -422,7 +546,11 @@ class ApplicationSerializer(ApplicationListSerializer):
     @extend_schema_field(AvailableActionSerializer(many=True))
     def get_available_actions(self, obj):
         request = self.context["request"]
-        return available_actions(obj, request.user)
+        if not hasattr(self, "_actions_cache"):
+            self._actions_cache = {}
+        if obj.pk not in self._actions_cache:
+            self._actions_cache[obj.pk] = available_actions(obj, request.user)
+        return self._actions_cache[obj.pk]
 
     class Meta(ApplicationListSerializer.Meta):
         fields = ApplicationListSerializer.Meta.fields + [
@@ -433,6 +561,7 @@ class ApplicationSerializer(ApplicationListSerializer):
             "assigned_at",
             "status_changed_at",
             "available_actions",
+            "readiness",
         ]
         read_only_fields = fields
 
@@ -476,11 +605,22 @@ class EventSerializer(serializers.ModelSerializer):
 
 
 class PaymentRequestSerializer(StrictSerializer):
+    product = serializers.UUIDField(
+        required=False,
+        help_text="Ставка выбранного продукта определяется сервером; annual_rate в этом режиме запрещена.",
+    )
     amount = serializers.DecimalField(max_digits=18, decimal_places=2, min_value=Decimal("1.00"))
     annual_rate = serializers.DecimalField(
-        max_digits=7, decimal_places=4, min_value=0, max_value=100
+        max_digits=7, decimal_places=4, min_value=0, max_value=100, required=False
     )
     term_months = serializers.IntegerField(min_value=1, max_value=120)
+
+    def validate(self, attrs):
+        if ("product" in attrs) == ("annual_rate" in attrs):
+            raise serializers.ValidationError(
+                "Передайте либо product для условий каталога, либо annual_rate для самостоятельного учебного расчёта."
+            )
+        return attrs
 
 
 class PaymentResponseSerializer(serializers.Serializer):
@@ -488,3 +628,7 @@ class PaymentResponseSerializer(serializers.Serializer):
     schedule = ScheduleField(
         help_text="График v1: месяц, платёж, основной долг, проценты, остаток; без комиссий."
     )
+    annual_rate = serializers.DecimalField(max_digits=7, decimal_places=4)
+    catalog_version = serializers.CharField(allow_null=True)
+    rate_source = serializers.ChoiceField(choices=["demo_assumption", "custom_calculation"])
+    cost_breakdown = CostBreakdownSerializer()

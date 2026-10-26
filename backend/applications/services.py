@@ -201,11 +201,13 @@ def snapshot(revision, app):
             "id": str(product.id),
             "code": product.code,
             "rules_version": product.rules_version,
+            "name": product.name,
             "annual_rate": str(product.annual_rate),
             "min_amount": str(product.min_amount),
             "max_amount": str(product.max_amount),
             "min_term_months": product.min_term_months,
             "max_term_months": product.max_term_months,
+            "catalog_reference": product.catalog_reference,
         },
         "financial": {
             name: str(getattr(revision, name)) if getattr(revision, name) is not None else None

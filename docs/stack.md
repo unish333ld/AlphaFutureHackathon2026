@@ -5,6 +5,7 @@
 | Область | Выбор |
 |---|---|
 | Backend | Python, Django, Django REST Framework; модульный монолит |
+| Документы | Django HTML/печатные CSS → WeasyPrint 70; локальный DejaVu Serif, приватные PDF в PostgreSQL |
 | База | PostgreSQL, Django ORM, миграции |
 | Frontend | React, TypeScript с `strict: true`, Vite |
 | UI | Core Components Альфа-Банка |

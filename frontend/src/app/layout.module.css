@@ -270,6 +270,10 @@
   overflow: auto;
   overscroll-behavior-inline: contain;
 }
+.comparisonTable {
+  min-width: 420px;
+  font-size: 14px;
+}
 .errorPage {
   max-width: 800px;
   margin: 40px auto;

@@ -44,6 +44,7 @@ import {
 import { LinkButton, useUnsavedGuard } from "../shared/ui/navigation";
 import { PageTitle } from "../shared/ui/PageTitle";
 import { useAssistantForm } from "./AssistantFormContext";
+import { CreditCost, ProductReference } from "./CreditDisclosure";
 import s from "../app/layout.module.css";
 import f from "./form.module.css";
 
@@ -369,7 +370,7 @@ function ApplicationForm({
       )}
     />
   );
-  const snapshotKey = `${values.amount}:${values.term_months}:${values.product}`;
+  const snapshotKey = `${values.amount}:${values.term_months}:${values.product}:${product?.rules_version}:${product?.annual_rate}`;
   function calculator() {
     if (
       !product ||
@@ -382,7 +383,7 @@ function ApplicationForm({
     calculate.mutate({
       amount,
       term_months: Number(values.term_months),
-      annual_rate: product.annual_rate,
+      product: product.id,
     });
   }
   const mutation = useMutation({
@@ -729,6 +730,38 @@ function ApplicationForm({
                     неизвестен, оставьте поле пустым — банк запросит уточнение.
                     Для отсутствующих обязательств укажите 0.
                   </p>
+                  <p>
+                    Указано{" "}
+                    {
+                      financialFields.filter(
+                        (name) => normalizeMoney(values[name]) !== null,
+                      ).length
+                    }{" "}
+                    из 3 показателей. Заполненность не означает одобрение.
+                  </p>
+                  <ul
+                    className={s.checkList}
+                    aria-label="Что уточнить перед отправкой"
+                  >
+                    {financialFields
+                      .filter((name) => normalizeMoney(values[name]) === null)
+                      .map((name) => (
+                        <li key={name}>
+                          <Button
+                            size={40}
+                            view="text"
+                            onClick={() => form.setFocus(name)}
+                          >
+                            Уточнить: {financialLabels[name]}
+                          </Button>
+                        </li>
+                      ))}
+                  </ul>
+                  <p className={s.muted}>
+                    Расходы включают операционные затраты и налоги. Платежи по
+                    долгам указывайте отдельно за тот же месяц — они учитываются
+                    один раз.
+                  </p>
                   <div className={s.formStack}>
                     {financialFields.map((name) => (
                       <div key={name}>
@@ -814,7 +847,9 @@ function ApplicationForm({
                   ? `Базовая ставка демо — ${rate(product.annual_rate)}`
                   : "Выберите продукт"}
               </p>
-              {calculate.data && calcFor === snapshotKey ? (
+              {calculate.data &&
+              calcFor === snapshotKey &&
+              calculate.data.catalog_version === product?.rules_version ? (
                 <>
                   <div className={s.bigAmount}>
                     {money(calculate.data.monthly_payment)}
@@ -823,6 +858,7 @@ function ApplicationForm({
                     В месяц. Без комиссий, расчёт выполнен сервером. Итоговые
                     условия появятся после решения.
                   </p>
+                  <CreditCost value={calculate.data.cost_breakdown} />
                 </>
               ) : (
                 <p className={s.muted}>
@@ -846,6 +882,7 @@ function ApplicationForm({
                 Рассчитать платёж
               </Button>
             </Panel>
+            {product ? <ProductReference product={product} /> : null}
             <Panel title="Что будет дальше">
               <ol className={s.checkList}>
                 {[

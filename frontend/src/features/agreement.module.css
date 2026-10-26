@@ -1,0 +1,123 @@
+.stack {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.links a {
+  overflow-wrap: anywhere;
+}
+.viewer {
+  width: 100%;
+  height: min(65vh, 720px);
+  border: 1px solid #c5cbd2;
+  background: white;
+}
+.hash {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  color: #4d5663;
+}
+.status {
+  min-height: 3em;
+}
+.completion {
+  text-align: center;
+  outline-offset: 6px;
+}
+.celebration {
+  position: relative;
+  width: 90px;
+  height: 90px;
+  margin: 0 auto 16px;
+}
+.check {
+  display: grid;
+  place-items: center;
+  width: 68px;
+  height: 68px;
+  margin: 10px auto;
+  border: 2px solid #147743;
+  border-radius: 50%;
+  color: #147743;
+  font-size: 38px;
+  animation: appear 280ms ease-out both;
+}
+.particle {
+  position: absolute;
+  left: 42px;
+  top: 42px;
+  width: 5px;
+  height: 5px;
+  background: #147743;
+  animation: burst 600ms ease-out both;
+  --x: 42px;
+  --y: 0px;
+}
+.particle:nth-child(2) {
+  --x: 35px;
+  --y: -32px;
+}
+.particle:nth-child(3) {
+  --x: -35px;
+  --y: -32px;
+}
+.particle:nth-child(4) {
+  --x: -45px;
+  --y: 12px;
+}
+.particle:nth-child(5) {
+  --x: 45px;
+  --y: 12px;
+}
+.particle:nth-child(6) {
+  --x: 28px;
+  --y: 40px;
+}
+.particle:nth-child(7) {
+  --x: -28px;
+  --y: 40px;
+}
+@keyframes appear {
+  from {
+    transform: scale(0.7);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@keyframes burst {
+  from {
+    transform: translate(0, 0);
+    opacity: 1;
+  }
+  to {
+    transform: translate(var(--x), var(--y));
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .check,
+  .particle {
+    animation: none;
+  }
+  .particle {
+    display: none;
+  }
+}
+@media (max-width: 500px) {
+  .viewer {
+    height: 50vh;
+  }
+  .links {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
