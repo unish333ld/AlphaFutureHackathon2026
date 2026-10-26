@@ -33,7 +33,7 @@ urlopen = build_opener(_NoRedirect()).open
 
 class AssistantUnavailable(APIException):
     status_code = 503
-    default_detail = "Савелий сейчас недоступен. Кредитный кабинет работает без помощника."
+    default_detail = "Помощник сейчас недоступен. Заявку можно продолжить без него."
     default_code = "assistant_unavailable"
 
 

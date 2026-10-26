@@ -14,7 +14,7 @@ test("readiness field focus, server-priced quote, evidence and responsive cost @
       "/app/loans/new?company=00000000-0000-0000-0000-000000000001&product=00000000-0000-0000-0000-000000000065",
     );
     await client.page
-      .getByRole("button", { name: "Уточнить: Месячная выручка", exact: true })
+      .getByRole("button", { name: "Проверить: Месячная выручка", exact: true })
       .click();
     const revenue = client.page.getByLabel("Месячная выручка, ₽", {
       exact: true,
@@ -53,14 +53,14 @@ test("readiness field focus, server-priced quote, evidence and responsive cost @
       money(quote.cost_breakdown.total_repayment),
     );
     await expect(
+      client.page.getByText("Откуда взяты условия", { exact: true }),
+    ).toHaveCount(0);
+    await expect(
       client.page.getByRole("link", {
         name: "Альфа-Банк: кредит одной суммой без залога",
       }),
-    ).toHaveAttribute(
-      "href",
-      "https://alfabank.ru/sme/profits/businesscredit/",
-    );
-    for (const width of [360, 768, 1280, 1440]) {
+    ).toHaveCount(0);
+    for (const width of [360, 390, 768, 1024, 1440]) {
       await client.page.setViewportSize({ width, height: 900 });
       expect(
         await client.page.evaluate(
@@ -99,7 +99,7 @@ test("counteroffer comparison and signed price passport survive acceptance and i
       product: "00000000-0000-0000-0000-000000000065",
       amount: "1500000.00",
       term_months: 24,
-      purpose: "Закупка товара · исследовательский сценарий",
+      purpose: "Закупка товара для тестового сценария",
       monthly_revenue: "500000.00",
       monthly_expenses: "320000.00",
       monthly_debt_payments: "30000.00",
@@ -181,7 +181,7 @@ test("counteroffer comparison and signed price passport survive acceptance and i
     );
     await client.page.reload();
     await expect(
-      client.page.getByText("Выдача смоделирована", { exact: true }).first(),
+      client.page.getByText("Выдача завершена", { exact: true }).first(),
     ).toBeVisible();
     app = await getApp(client.context, app.id);
     expect(currentOffer(app)!.agreement!.cost_breakdown).toEqual(

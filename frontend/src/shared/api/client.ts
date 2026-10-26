@@ -11,9 +11,10 @@ export type Action = Schema["AvailableAction"];
 export type ActionName = Schema["ActionEnum"];
 export type Status = Schema["ApplicationStatusEnum"];
 export type Agreement = Schema["Agreement"];
-export type AssistantConversation = Schema["Conversation"];
 export type AssistantMessage = Schema["Message"];
-export type AssistantReply = Schema["AssistantReply"];
+export type AssistantStep = Schema["AssistantStep"];
+export type StepAction = Schema["StepActionRequest"];
+export type NotificationBatch = Schema["NotificationBatch"];
 export type Page<T> = {
   count: number;
   next: string | null;
@@ -173,36 +174,33 @@ export const api = {
       `applications/${id}/events/${query({ page })}`,
       { signal },
     ),
+  notifications: (cursor?: string, signal?: AbortSignal) =>
+    request<NotificationBatch>(
+      `applications/notifications/${cursor ? query({ cursor }) : ""}`,
+      { signal },
+    ),
   calculator: (data: Schema["PaymentRequestRequest"]) =>
     request<Schema["PaymentResponse"]>("calculator/payment/", {
       method: "POST",
       body: data,
     }),
-  assistantConversations: (page = 1, signal?: AbortSignal) =>
-    request<Page<AssistantConversation>>(
-      `assistant/conversations/${query({ page })}`,
-      { signal },
-    ),
-  assistantConversation: (id: string, signal?: AbortSignal) =>
-    request<AssistantConversation>(`assistant/conversations/${id}/`, {
-      signal,
-    }),
-  assistantDeleteConversation: (id: string) =>
-    request<void>(`assistant/conversations/${id}/`, { method: "DELETE" }),
-  assistantCreateConversation: (company_id: string, application_id?: string) =>
-    request<AssistantConversation>("assistant/conversations/", {
+  assistantCurrent: (
+    company_id: string,
+    application_id?: string,
+    signal?: AbortSignal,
+  ) =>
+    request<AssistantStep>("assistant/conversations/current/", {
       method: "POST",
       body: { company_id, ...(application_id ? { application_id } : {}) },
+      signal,
     }),
-  assistantMessages: (id: string, page = 1, signal?: AbortSignal) =>
-    request<Page<AssistantMessage>>(
-      `assistant/conversations/${id}/messages/${query({ page })}`,
-      { signal },
-    ),
-  assistantSend: (id: string, text: string, expected_version: number) =>
-    request<AssistantReply>(`assistant/conversations/${id}/messages/`, {
+  assistantStep: (id: string, signal?: AbortSignal) =>
+    request<AssistantStep>(`assistant/conversations/${id}/step/`, { signal }),
+  assistantAct: (id: string, data: StepAction, signal?: AbortSignal) =>
+    request<AssistantStep>(`assistant/conversations/${id}/step/`, {
       method: "POST",
-      body: { text, expected_version },
+      body: data,
+      signal,
       timeoutMs: 90_000,
     }),
 };

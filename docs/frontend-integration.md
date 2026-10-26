@@ -6,7 +6,7 @@ API 1.2.0 добавляет `Product.catalog_reference`, `Application.readiness
 
 API **1.3.0** развивает этот контракт: приватные PDF/metadata, nullable Agreement.confirmation, документы original/signed_copy, обязательная кодовая попытка на прежнем sign endpoint. Старый hash-only sign больше не работает. Пошаговая интеграция/ошибки/миграция frontend — [agreements.md](agreements.md). Readiness теперь отдельно сообщает verification_state (not_checked/pending/checked/needs_information/technical_error/outdated), checked_at; некорректный показатель имеет state=invalid, не ready.
 
-Необязательный помощник Савелий добавляет только `/assistant/conversations/` и сообщения к ним; кредитные endpoints и `available_actions` не заменены. Различать `expected_version` диалога и `application_version`/`lock_version` заявки. Подтверждение предложения полей и обработка неопределённого ответа: [assistant.md](assistant.md).
+API **1.4.0**: очередь специалиста и история заявки возвращают до 10 записей на странице. `GET applications/notifications/` отдаёт новые события рассмотрения после cursor; без cursor возвращает только исходную отметку. Помощник работает через `POST assistant/conversations/current/` и `GET/POST assistant/conversations/{id}/step/`: один актуальный шаг, режим choice/input/waiting/result/error, version и step_id. Повторный request_id сверяет серверный журнал; устаревшие шаги и action_id получают 409. Прежние endpoints диалогов сохранены для совместимости, frontend их не вызывает. Кредитные endpoints и available_actions не изменены. Подробнее — [assistant.md](assistant.md).
 
 ## Экран сотрудника → API → поля → действия → ограничения
 
@@ -17,11 +17,11 @@ API **1.3.0** развивает этот контракт: приватные P
 | Очередь | `GET staff/applications/` | id, number, company/company_name/company_inn, product/product_name, current_revision_id, amount, term_months, risk_level, status, assigned_to, assigned_at, created_at, updated_at, status_changed_at, lock_version | Активный specialist; без истории ревизий |
 | Свободные / мои | Та же очередь: `assignment=free` / `mine` | Реальное назначение; mine — текущий пользователь; default all | Чужое назначение нельзя изменить |
 | Фильтры / поиск | `status`, `risk_level`, `search` | Один status; low/medium/high/unassessed; подстрока номера/названия компании/ИНН | Нет Grade A–E, приоритета или SLA |
-| Сортировка / страницы | `ordering`, `page` | created_at, updated_at, assigned_at, amount, term_months, number; `-` для убывания; default -created_at | 25 строк, второй ключ id, NULL в конце; неизвестные параметры — 400 |
+| Сортировка / страницы | `ordering`, `page` | created_at, updated_at, assigned_at, amount, term_months, number; `-` для убывания; default -created_at | 10 строк, второй ключ id, NULL в конце; неизвестные параметры — 400 |
 | Карточка | `GET staff/applications/{id}/` | current_revision_id, revisions, проверки, assessment/decision/offer/agreement/disbursement, available_actions | Текущая ревизия — максимальный revision_no |
 | Взять в работу | `POST staff/applications/{id}/claim/` | `{lock_version}`; исполнитель берётся из сессии | checking/review/needs_info/offered/accepted/signed |
 | Освободить | `POST staff/applications/{id}/release/` | `{lock_version}` | Только текущий исполнитель; чужая/свободная — 409 |
-| Уточнить | `POST staff/applications/{id}/request-information/` | `{lock_version, question}` → needs_info | Текущий исполнитель; review/checking |
+| Проверить данные | `POST staff/applications/{id}/request-information/` | `{lock_version, question}` → needs_info | Текущий исполнитель; review/checking |
 | Решение по правилам | `POST staff/applications/{id}/decide/` | `{lock_version}` → revisions[0].assessment.decision | Текущий исполнитель; review; актуальные проверки/оценка |
 | Выдача | `POST agreements/{id}/disburse/` | `{lock_version}` + `Idempotency-Key: <UUID>` | Новая выдача: текущий исполнитель, signed и целые условия |
 | История | `GET applications/{id}/events/` | actor/event_type/from_status/to_status/details/created_at | Пагинация; company scope |

@@ -1,6 +1,6 @@
-import type { Product, Schema } from "../shared/api/client";
+import type { Schema } from "../shared/api/client";
 import { money, rate } from "../entities/credit";
-import { Facts, Notice, Panel } from "../shared/ui/kit";
+import { Facts, Notice } from "../shared/ui/kit";
 import s from "../app/layout.module.css";
 
 export function CreditCost({ value }: { value: Schema["CostBreakdown"] }) {
@@ -29,11 +29,11 @@ export function CreditCost({ value }: { value: Schema["CostBreakdown"] }) {
           rows={[
             { label: "Основной долг", value: money(value.principal) },
             {
-              label: "Комиссии в учебной модели",
+              label: "Комиссии",
               value: money(value.fees_total),
             },
             {
-              label: "Допуслуги в учебной модели",
+              label: "Дополнительные услуги",
               value: money(value.services_total),
             },
             { label: "Первый платёж", value: money(value.first_payment) },
@@ -44,12 +44,10 @@ export function CreditCost({ value }: { value: Schema["CostBreakdown"] }) {
       </details>
       {!value.is_complete ? (
         <Notice tone="warning">
-          Стоимость неполная: известные платежи составляют{" "}
-          {money(value.known_payments_total)}. Неизвестные расходы не приняты за
-          ноль.
+          Часть расходов пока неизвестна. Подтверждённые платежи:{" "}
+          {money(value.known_payments_total)}.
         </Notice>
       ) : null}
-      <p className={s.muted}>{value.disclosure}</p>
     </section>
   );
 }
@@ -84,7 +82,7 @@ export function OfferComparison({
   ];
   return (
     <section aria-label="Сравнение условий">
-      <h3>Запрашивали → предлагаем</h3>
+      <h3>Сравнение условий</h3>
       <div
         className={s.scrollArea}
         role="region"
@@ -112,46 +110,9 @@ export function OfferComparison({
           </tbody>
         </table>
       </div>
-      <p className={s.muted}>
-        Сравниваются ваш рассмотренный запрос и сохранённые условия предложения.{" "}
-        {value.explanation}
-      </p>
+      {value.explanation ? (
+        <p className={s.muted}>{value.explanation}</p>
+      ) : null}
     </section>
-  );
-}
-
-export function ProductReference({ product }: { product: Product }) {
-  const reference = product.catalog_reference;
-  if (!reference) return null;
-  return (
-    <Panel title="Откуда взяты условия">
-      <p>Учебная ставка — {rate(product.annual_rate)} годовых.</p>
-      <p className={s.muted}>
-        Публичный ориентир: {money(reference.min_amount)}–
-        {money(reference.max_amount)}, {reference.min_term_months}–
-        {reference.max_term_months} месяцев. Ставка банка — от{" "}
-        {rate(reference.advertised_rate_from)}.
-      </p>
-      <p className={s.muted}>{reference.rate_note}</p>
-      <p>
-        <a href={reference.source_url} target="_blank" rel="noreferrer">
-          {reference.source_title}
-        </a>
-      </p>
-      <p className={s.muted}>
-        Проверено {reference.observed_at.split("-").reverse().join(".")} по
-        поисковой копии официальной страницы. Дата вступления тарифа в силу не
-        установлена.
-      </p>
-      <details>
-        <summary>Ограничения демо</summary>
-        <p className={s.muted}>{reference.limitations}</p>
-        <p className={s.muted}>
-          На публичной странице указан срок деятельности от{" "}
-          {reference.minimum_business_age_months} месяцев. В демо не
-          подтверждается соответствие всем требованиям банка.
-        </p>
-      </details>
-    </Panel>
   );
 }

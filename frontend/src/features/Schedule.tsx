@@ -10,11 +10,11 @@ export function Schedule({
   return (
     <details>
       <summary className={s.link}>
-        График платежей · {schedule.rows.length} мес.
+        График платежей за {schedule.rows.length} мес.
       </summary>
       <p className={s.muted}>
-        Демонстрационный аннуитет по номерам месяцев, без комиссий и календарных
-        дат. Последняя строка корректирует округление.
+        Периоды указаны по номерам месяцев. Календарные даты платежей пока не
+        заданы.
       </p>
       <div
         className={s.scrollArea}

@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AlfaBankLIcon } from "@alfalab/icons-logotype/AlfaBankLIcon";
+import { BurgerMIcon } from "@alfalab/icons-glyph/BurgerMIcon";
+import { LogOutMIcon } from "@alfalab/icons-glyph/LogOutMIcon";
 import {
   Navigate,
   NavLink,
@@ -12,6 +14,8 @@ import { Button, Dialog, ErrorNotice, Loading } from "../shared/ui/kit";
 import LoginForm from "../features/LoginForm";
 import AssistantWidget from "../features/AssistantWidget";
 import { AssistantFormProvider } from "../features/AssistantFormContext";
+import { ProfileButton } from "../features/ProfileButton";
+import { ResultNotifications } from "../features/ResultNotifications";
 import s from "./layout.module.css";
 
 export default function Shell() {
@@ -70,7 +74,7 @@ export default function Shell() {
                 height={40}
               />
               <span>
-                Кредитный кабинет<small>АЛЬФА ХАК 2026, ДЕМО</small>
+                Кредитный кабинет<small>АЛЬФА ХАК 2026</small>
               </span>
             </NavLink>
             <button
@@ -80,7 +84,7 @@ export default function Shell() {
               aria-controls="main-nav"
               aria-label="Меню"
             >
-              ☰
+              <BurgerMIcon aria-hidden="true" />
             </button>
             <nav
               id="main-nav"
@@ -113,24 +117,16 @@ export default function Shell() {
               )}
             </nav>
             <div className={s.account}>
-              <span className={s.avatar} aria-hidden="true">
-                {(auth.user.first_name || auth.user.username)
-                  .slice(0, 1)
-                  .toUpperCase()}
-              </span>
-              <span className={s.accountName}>
-                {auth.user.first_name || auth.user.username}
-                <small>
-                  {staff ? "Кредитный специалист" : "Представитель компании"}
-                </small>
-              </span>
+              <ProfileButton />
               <Button
                 ref={logoutTrigger}
                 size={32}
                 view="text"
+                aria-label="Выйти из кабинета"
+                title="Выйти из кабинета"
                 onClick={() => setLogoutDialog(true)}
               >
-                Выйти
+                <LogOutMIcon aria-hidden="true" />
               </Button>
             </div>
           </div>
@@ -145,12 +141,13 @@ export default function Shell() {
         </main>
         <ScrollRestoration />
         <footer className={s.footer}>
-          <span>Синтетический прототип, Альфа Хак 2026</span>
-          <span>Подпись и выдача моделируются. Время — МСК.</span>
+          <span>Тестовый режим. Подпись и выдача без реальных операций.</span>
+          <span>Альфа Хак 2026. Время — МСК.</span>
         </footer>
         {!staff && import.meta.env.VITE_AI_ASSISTANT_ENABLED === "true" ? (
           <AssistantWidget />
         ) : null}
+        {!staff ? <ResultNotifications /> : null}
         <Dialog
           title="Выйти из кабинета?"
           open={logoutDialog}

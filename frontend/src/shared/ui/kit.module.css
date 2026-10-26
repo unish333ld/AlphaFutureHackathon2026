@@ -30,7 +30,13 @@
   margin-bottom: 5px;
 }
 .notice p {
-  margin: 6px 0 12px;
+  margin: 0;
+}
+.notice > * + * {
+  margin-top: 8px;
+}
+.notice > :last-child {
+  margin-bottom: 0;
 }
 .info {
   background: #f0f5ff;
@@ -67,18 +73,29 @@
   border-radius: 8px;
   max-width: 100%;
   white-space: normal;
+  vertical-align: middle;
+  min-width: 0;
+  flex-shrink: 0;
+  text-align: left;
 }
-.badge span {
-  font-size: 8px;
+.badge svg {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+}
+.badgeText {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: inherit;
 }
 .loading {
-  padding: 40px 20px;
+  padding: 24px 16px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 12px;
   color: #5b6470;
-  min-height: 120px;
+  min-height: 64px;
 }
 .spinner {
   width: 20px;

@@ -22,6 +22,7 @@ import {
   actionFor,
   cents,
   currentRevision,
+  displayName,
   money,
   normalizeMoney,
   rate,
@@ -44,7 +45,7 @@ import {
 import { LinkButton, useUnsavedGuard } from "../shared/ui/navigation";
 import { PageTitle } from "../shared/ui/PageTitle";
 import { useAssistantForm } from "./AssistantFormContext";
-import { CreditCost, ProductReference } from "./CreditDisclosure";
+import { CreditCost } from "./CreditDisclosure";
 import s from "../app/layout.module.css";
 import f from "./form.module.css";
 
@@ -410,7 +411,7 @@ function ApplicationForm({
             ...payload,
             lock_version: saved.lock_version,
           });
-          await refresh();
+          await refresh(result);
           guard.allowNavigation();
           form.reset(input);
           navigate(`/app/loans/${result.id}/submitted`, { replace: true });
@@ -550,7 +551,7 @@ function ApplicationForm({
       <PageTitle
         title={
           mode === "answer"
-            ? "Уточните сведения"
+            ? "Проверьте данные заявки"
             : mode === "revise"
               ? "Пересмотрите параметры"
               : step === "review"
@@ -666,7 +667,7 @@ function ApplicationForm({
                           onChange={input.onChange}
                           options={companies.data.map((item) => ({
                             key: item.id,
-                            content: item.name,
+                            content: displayName(item.name),
                           }))}
                           disabled={!!base}
                           error={fieldState.error?.message}
@@ -683,7 +684,7 @@ function ApplicationForm({
                           onChange={input.onChange}
                           options={products.data.map((item) => ({
                             key: item.id,
-                            content: item.name,
+                            content: displayName(item.name),
                           }))}
                           disabled={!!base}
                           error={fieldState.error?.message}
@@ -727,8 +728,8 @@ function ApplicationForm({
                 <Panel title="Финансовые показатели">
                   <p className={s.muted}>
                     Укажите суммы за один месяц. Если показатель пока
-                    неизвестен, оставьте поле пустым — банк запросит уточнение.
-                    Для отсутствующих обязательств укажите 0.
+                    неизвестен, оставьте поле пустым. Специалист попросит
+                    проверить данные. Для отсутствующих обязательств укажите 0.
                   </p>
                   <p>
                     Указано{" "}
@@ -741,7 +742,7 @@ function ApplicationForm({
                   </p>
                   <ul
                     className={s.checkList}
-                    aria-label="Что уточнить перед отправкой"
+                    aria-label="Что проверить перед отправкой"
                   >
                     {financialFields
                       .filter((name) => normalizeMoney(values[name]) === null)
@@ -752,7 +753,7 @@ function ApplicationForm({
                             view="text"
                             onClick={() => form.setFocus(name)}
                           >
-                            Уточнить: {financialLabels[name]}
+                            Проверить: {financialLabels[name]}
                           </Button>
                         </li>
                       ))}
@@ -774,7 +775,7 @@ function ApplicationForm({
             ) : (
               <>
                 <Panel title="Данные компании">
-                  <h3>{company?.name ?? initial?.company_name}</h3>
+                  <h3>{displayName(company?.name ?? initial?.company_name)}</h3>
                   <Facts
                     rows={[
                       { label: "ИНН", value: company?.inn ?? "Нет данных" },
@@ -829,7 +830,8 @@ function ApplicationForm({
           <aside className={s.stack}>
             <Panel title="Данные компании">
               <h3>
-                {company?.name ?? initial?.company_name ?? "Выберите компанию"}
+                {displayName(company?.name ?? initial?.company_name) ||
+                  "Выберите компанию"}
               </h3>
               <p className={s.muted}>
                 {company
@@ -838,13 +840,13 @@ function ApplicationForm({
               </p>
               <p className={s.muted}>
                 Компания и продукт сохранённой заявки не меняются. Изменённые
-                финансовые сведения после отправки создают новую ревизию.
+                финансовые сведения после отправки проходят повторную проверку.
               </p>
             </Panel>
             <Panel title="Предварительный платёж">
               <p className={s.muted}>
                 {product
-                  ? `Базовая ставка демо — ${rate(product.annual_rate)}`
+                  ? `Предварительная ставка — ${rate(product.annual_rate)}`
                   : "Выберите продукт"}
               </p>
               {calculate.data &&
@@ -854,10 +856,7 @@ function ApplicationForm({
                   <div className={s.bigAmount}>
                     {money(calculate.data.monthly_payment)}
                   </div>
-                  <p className={s.muted}>
-                    В месяц. Без комиссий, расчёт выполнен сервером. Итоговые
-                    условия появятся после решения.
-                  </p>
+                  <p className={s.muted}>Предварительный платёж в месяц.</p>
                   <CreditCost value={calculate.data.cost_breakdown} />
                 </>
               ) : (
@@ -882,7 +881,6 @@ function ApplicationForm({
                 Рассчитать платёж
               </Button>
             </Panel>
-            {product ? <ProductReference product={product} /> : null}
             <Panel title="Что будет дальше">
               <ol className={s.checkList}>
                 {[
@@ -941,9 +939,9 @@ function ApplicationForm({
               {step === "parameters"
                 ? "Проверить заявку"
                 : mode === "answer"
-                  ? "Отправить уточнение"
+                  ? "Отправить проверенные данные"
                   : mode === "revise"
-                    ? "Отправить новую ревизию"
+                    ? "Отправить изменения"
                     : "Отправить заявку"}
             </Button>
           </div>

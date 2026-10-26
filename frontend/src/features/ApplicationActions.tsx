@@ -12,7 +12,6 @@ import {
 import { ApiError } from "../shared/api/errors";
 import { beginIntent, clearIntent, readIntent } from "../shared/api/intent";
 import { CreditCost } from "./CreditDisclosure";
-import { AgreementSigning } from "./AgreementSigning";
 import {
   actionFor,
   actionLabels,
@@ -105,11 +104,9 @@ export function ApplicationActions({
         setQuestion("");
         await refresh();
         setMessage(
-          action.action === "disburse"
-            ? "Моделируемая выдача подтверждена сервером."
-            : action.action === "decide"
-              ? "Решение по серверным правилам готово. Результат показан в карточке."
-              : "Изменения сохранены сервером.",
+          action.action === "request_information"
+            ? "Запрос отправлен клиенту."
+            : "",
         );
       } catch (cause) {
         setError(cause);
@@ -260,7 +257,12 @@ export function ApplicationActions({
     .map((name) => actionFor(app, name))
     .filter((value): value is Action => !!value);
   const targetOffer = dialog ? currentOffer(dialog.app) : offer;
-  const dialogTitle = dialog ? actionLabels[dialog.action.action] : "";
+  const dialogTitle =
+    dialog?.action.action === "request_information"
+      ? "Проверка введённых данных"
+      : dialog
+        ? actionLabels[dialog.action.action]
+        : "";
   return (
     <Panel title={staff ? "Действия специалиста" : "Следующий шаг"}>
       <p className={s.muted}>{nextSteps[app.status]}</p>
@@ -292,13 +294,6 @@ export function ApplicationActions({
         </Notice>
       ) : null}
       <div className={s.stack}>
-        {!staff && agreement ? (
-          <AgreementSigning
-            app={app}
-            reload={reload}
-            disabled={!actionFor(app, "sign_agreement")?.allowed}
-          />
-        ) : null}
         {available.map((action, index) => {
           const enabled = action.allowed && !!action.target_id;
           const formPath =
@@ -389,32 +384,29 @@ export function ApplicationActions({
         }
       >
         {discardQuestion ? (
-          <p>Введённый вопрос будет удалён. Запрос в банк ещё не отправлен.</p>
+          <p>Текст запроса будет удалён. Клиенту ничего не отправлено.</p>
         ) : (
           <>
             {dialog?.action.action === "decide" ? (
               <>
                 <p>
-                  Сервер применит правила к текущей ревизии и проверкам.
-                  Возможны одобрение, встречные условия или отказ.
+                  Правила рассмотрят актуальные данные и проверки. Возможны
+                  одобрение, встречные условия или отказ.
                 </p>
-                <Notice>
-                  Ставка и итоговая сумма выбираются сервером. Результат не
-                  задан заранее.
-                </Notice>
+                <Notice>Итоговые условия определяются автоматически.</Notice>
               </>
             ) : null}
             {dialog?.action.action === "request_information" ? (
               <>
                 <p>
-                  Клиент ответит полным набором уточнённых показателей. Будет
-                  создана новая ревизия, проверки выполнятся заново.
+                  Укажите, какие уже введённые сведения нужно проверить. После
+                  ответа клиента проверки выполнятся снова.
                 </p>
                 <Textarea
                   id="clarification-question"
-                  aria-label="Какие сведения нужны?"
+                  aria-label="Какие данные нужно проверить?"
                   aria-invalid={!!questionError}
-                  label="Какие сведения нужны?"
+                  label="Какие данные нужно проверить?"
                   labelView="outer"
                   value={question}
                   onChange={(event) => setQuestion(event.target.value)}
@@ -430,7 +422,7 @@ export function ApplicationActions({
               <>
                 <p>
                   {dialog.action.action === "accept_offer"
-                    ? "Вы принимаете показанные условия. Сервер сформирует демонстрационный договор для условного подписания."
+                    ? "Вы принимаете эти условия. После этого договор будет доступен для просмотра и подтверждения."
                     : "Предложение будет отклонено, а заявка завершена. Это действие нельзя отменить в текущем процессе."}
                 </p>
                 {targetOffer ? (

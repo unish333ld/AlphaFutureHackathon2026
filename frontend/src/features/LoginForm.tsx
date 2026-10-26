@@ -72,10 +72,10 @@ export default function LoginForm({ reauth = false }: { reauth?: boolean }) {
   return (
     <form onSubmit={handleSubmit} className={s.formStack} noValidate>
       {!reauth ? (
-        <div className={s.profileChoices} aria-label="Демонстрационные профили">
+        <div className={s.profileChoices} aria-label="Выбрать профиль">
           <Button
             size={32}
-            disabled={form.formState.isSubmitting}
+            disabled={pending}
             onClick={() =>
               form.setValue("username", "client", { shouldValidate: true })
             }
@@ -84,7 +84,7 @@ export default function LoginForm({ reauth = false }: { reauth?: boolean }) {
           </Button>
           <Button
             size={32}
-            disabled={form.formState.isSubmitting}
+            disabled={pending}
             onClick={() =>
               form.setValue("username", "specialist", { shouldValidate: true })
             }
@@ -108,7 +108,7 @@ export default function LoginForm({ reauth = false }: { reauth?: boolean }) {
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
-            disabled={form.formState.isSubmitting}
+            disabled={pending}
             aria-invalid={!!fieldState.error}
             aria-describedby={
               fieldState.error ? `${id}-username-error` : undefined
@@ -148,13 +148,13 @@ export default function LoginForm({ reauth = false }: { reauth?: boolean }) {
                   passwordVisible ? "Скрыть пароль" : "Показать пароль"
                 }
                 aria-pressed={passwordVisible}
-                disabled={form.formState.isSubmitting}
+                disabled={pending}
                 onClick={() => setPasswordVisible((visible) => !visible)}
               >
                 {passwordVisible ? "Скрыть" : "Показать"}
               </Button>
             }
-            disabled={form.formState.isSubmitting}
+            disabled={pending}
             aria-invalid={!!fieldState.error}
             aria-describedby={
               fieldState.error ? `${id}-password-error` : undefined
@@ -180,10 +180,7 @@ export default function LoginForm({ reauth = false }: { reauth?: boolean }) {
         {reauth ? "Восстановить сессию" : "Войти в кабинет"}
       </Button>
       {!reauth ? (
-        <p className={s.muted}>
-          Используйте демо-профиль и пароль из настроек проекта. Роль и
-          полномочия определяет сервер.
-        </p>
+        <p className={s.muted}>Пароль указан в инструкции запуска.</p>
       ) : null}
     </form>
   );

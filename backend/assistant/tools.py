@@ -38,7 +38,7 @@ TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "list_credit_products",
-            "description": "Получить доступные демонстрационные кредитные продукты и границы условий.",
+            "description": "Получить доступные кредитные продукты и границы условий.",
             "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
         },
     },
@@ -46,7 +46,7 @@ TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "calculate_payment",
-            "description": "Серверный предварительный расчёт платежа по демо-продукту. Не является одобрением.",
+            "description": "Получить предварительный расчёт платежа по продукту. Это не одобрение.",
             "parameters": {
                 "type": "object",
                 "properties": {

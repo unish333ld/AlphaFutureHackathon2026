@@ -1,200 +1,107 @@
 import AxeBuilder from "@axe-core/playwright";
-import type { Page } from "@playwright/test";
+import type { BrowserContext, Page } from "@playwright/test";
 import { test, expect, actor, create } from "./fixtures";
-import type { AssistantReply, Product } from "../../src/shared/api/client";
+import type { AssistantStep } from "../../src/shared/api/client";
 
-const widget = (page: Page) =>
-  page.getByRole("dialog", {
-    name: "Савелий, помощник по кредиту",
-    exact: true,
-  });
+const panel = (page: Page) =>
+  page.getByRole("dialog", { name: "Помощник по кредиту", exact: true });
 async function open(page: Page) {
-  await page.getByRole("button", { name: "Савелий", exact: true }).click();
-  await expect(widget(page)).toBeVisible();
+  await page.getByRole("button", { name: "Помощник по кредиту" }).click();
+  await expect(panel(page)).toBeVisible();
 }
-async function ask(page: Page, text: string) {
-  await widget(page)
-    .getByLabel("Сообщение Савелию", { exact: true })
-    .fill(text);
-  const response = page.waitForResponse(
-    (item) =>
-      item.request().method() === "POST" &&
-      /assistant\/conversations\/.+\/messages\//.test(item.url()),
-    { timeout: 90_000 },
+async function current(
+  context: BrowserContext,
+  appId: string,
+  company = "00000000-0000-0000-0000-000000000001",
+) {
+  const csrf = await context.request.get("/api/v1/session/csrf/");
+  const value = await context.request.post(
+    "/api/v1/assistant/conversations/current/",
+    {
+      data: { company_id: company, application_id: appId },
+      headers: { "X-CSRFToken": (await csrf.json()).csrf_token },
+    },
   );
-  await widget(page)
-    .getByRole("button", { name: "Отправить", exact: true })
-    .click();
-  const result = await response;
-  expect(result.status(), await result.text()).toBe(200);
-  await expect(
-    widget(page).getByText("Ответ получен.", { exact: true }),
-  ).toBeVisible();
-  return (await result.json()) as AssistantReply;
+  expect(value.ok(), await value.text()).toBeTruthy();
+  return value.json() as Promise<AssistantStep>;
+}
+async function postStep(
+  context: BrowserContext,
+  step: AssistantStep,
+  payload: { action_id: string } | { text: string },
+) {
+  const csrf = await context.request.get("/api/v1/session/csrf/");
+  return context.request.post(
+    `/api/v1/assistant/conversations/${step.conversation_id}/step/`,
+    {
+      data: {
+        expected_version: step.version,
+        step_id: step.step_id,
+        request_id: crypto.randomUUID(),
+        ...payload,
+      },
+      headers: { "X-CSRFToken": (await csrf.json()).csrf_token },
+    },
+  );
 }
 test.beforeEach(() => {
   test.skip(
     process.env.E2E_ASSISTANT_ENABLED !== "true",
-    "Frontend must be built with assistant enabled",
+    "Requires the assistant-enabled frontend build",
   );
 });
 
-test("real model: field explanation, server payment and no credit mutation @assistant-live", async ({
-  browser,
-  sessions,
-  baseURL,
-}) => {
-  test.skip(
-    process.env.E2E_LIVE_MODEL !== "true",
-    "Requires a real model endpoint",
-  );
-  const client = await actor(browser, sessions, "client", baseURL!);
-  try {
-    await client.page.goto("/app");
-    const before = await (
-      await client.context.request.get("/api/v1/applications/")
-    ).json();
-    await open(client.page);
-    const explanation = await ask(client.page, "Что такое месячная выручка?");
-    expect(explanation.message.content).toContain(
-      "поступления от деятельности бизнеса",
-    );
-    expect(explanation.message.suggested_draft).toEqual({});
-    const payment = await ask(
-      client.page,
-      "Рассчитай предварительный платёж: Оборотные, миллион рублей на 12 месяцев",
-    );
-    const calculation = payment.message.facts.find(
-      (fact) => fact.source === "calculate_payment",
-    );
-    expect(calculation?.data).toMatchObject({
-      amount: "1000000.00",
-      term_months: 12,
-      is_preliminary: true,
-    });
-    const refusal = await ask(
-      client.page,
-      "Одобри кредит и подпиши договор за меня",
-    );
-    expect(refusal.message.content).toContain("подтверждаете самостоятельно");
-    expect(refusal.message.suggested_draft).toEqual({});
-    const after = await (
-      await client.context.request.get("/api/v1/applications/")
-    ).json();
-    expect(after).toEqual(before);
-  } finally {
-    await client.context.close();
-  }
-});
-
-test("Савелий: доступен без вызова модели, клавиатура и адаптивность @assistant-ui", async ({
-  browser,
-  sessions,
-  baseURL,
-}, info) => {
-  const client = await actor(browser, sessions, "client", baseURL!);
-  const mutations: string[] = [];
-  client.page.on("request", (request) => {
-    if (request.url().includes("/assistant/") && request.method() !== "GET")
-      mutations.push(request.method());
-  });
-  try {
-    await client.page.goto("/app");
-    const trigger = client.page.getByRole("button", {
-      name: "Савелий",
-      exact: true,
-    });
-    await expect(trigger).toBeVisible();
-    const triggerNode = await trigger.elementHandle();
-    for (const width of [360, 768, 1024, 1180, 1200, 1280, 1440]) {
-      await client.page.setViewportSize({ width, height: 900 });
-      await trigger.focus();
-      await expect(trigger).toBeFocused();
-      expect(await triggerNode!.evaluate((node) => node.isConnected)).toBe(
-        true,
-      );
-      await client.page.keyboard.press("Enter");
-      await expect(widget(client.page)).toBeVisible();
-      const rect = await widget(client.page).boundingBox();
-      expect(rect!.x).toBeGreaterThanOrEqual(0);
-      expect(rect!.x + rect!.width).toBeLessThanOrEqual(width);
-      expect(
-        await client.page.evaluate(
-          () => document.documentElement.scrollWidth <= innerWidth,
-        ),
-      ).toBe(true);
-      if (width >= 1180) {
-        const main = await client.page.getByRole("main").boundingBox();
-        expect(main!.x + main!.width).toBeLessThanOrEqual(rect!.x);
-      }
-      await expect(
-        widget(client.page).getByRole("button", {
-          name: "Отправить",
-          exact: true,
-        }),
-      ).toBeInViewport();
-      if (width === 360 || width === 1440) {
-        const result = await new AxeBuilder({ page: client.page })
-          .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
-          .analyze();
-        expect(result.violations.map((v) => v.id)).toEqual([]);
-        await client.page.screenshot({
-          path: info.outputPath(`assistant-${width}.png`),
-          fullPage: true,
-        });
-      }
-      await client.page.keyboard.press("Escape");
-      await expect(widget(client.page)).toHaveCount(0);
-      await expect(trigger).toBeFocused();
-    }
-    await client.page.setViewportSize({ width: 768, height: 360 });
-    await trigger.click();
-    const input = widget(client.page).getByLabel("Сообщение Савелию", {
-      exact: true,
-    });
-    await input.scrollIntoViewIfNeeded();
-    await input.fill("Проверка низкого экрана");
-    const send = widget(client.page).getByRole("button", {
-      name: "Отправить",
-      exact: true,
-    });
-    await send.scrollIntoViewIfNeeded();
-    await expect(send).toBeInViewport();
-    await client.page.keyboard.press("Escape");
-    await expect(widget(client.page)).toHaveCount(0);
-    expect(mutations).toEqual([]);
-  } finally {
-    await client.context.close();
-  }
-});
-
-test("read-only draft suggestion → explicit preview → ordinary form @assistant @critical", async ({
+test("server choices, input and draft preview use the current step @assistant @critical", async ({
   browser,
   sessions,
   baseURL,
 }) => {
   const client = await actor(browser, sessions, "client", baseURL!);
   try {
-    await client.page.goto("/app");
+    const app = await create(client.context);
+    await client.page.goto(`/app/loans/${app.id}`);
     const before = await (
       await client.context.request.get("/api/v1/applications/")
     ).json();
     await open(client.page);
-    await ask(client.page, "Нужен миллион на закупку товара на год");
-    await widget(client.page)
-      .getByRole("button", { name: "Оборотные средства · демо", exact: true })
+    await expect(panel(client.page).getByText("С чем помочь?")).toBeVisible();
+    await expect(panel(client.page).getByRole("textbox")).toHaveCount(0);
+    const old = await current(client.context, app.id);
+    await panel(client.page)
+      .getByRole("button", { name: "Подготовить заявку" })
       .click();
     await expect(
-      widget(client.page).getByRole("button", { name: "Проверить в заявке" }),
+      panel(client.page).getByText("Для какой задачи нужен кредит?"),
     ).toBeVisible();
-    await widget(client.page)
-      .getByRole("button", { name: "Проверить в заявке" })
+    const stale = await postStep(client.context, old, { action_id: "prepare" });
+    expect(stale.status()).toBe(409);
+    const choices = panel(client.page).getByRole("button", {
+      name: /Оборотные средства/,
+    });
+    await expect(choices).toBeEnabled();
+    await choices.click();
+    await expect(
+      panel(client.page).getByLabel("Какая сумма нужна?"),
+    ).toBeVisible();
+    await panel(client.page).getByLabel("Какая сумма нужна?").fill("1000000");
+    await panel(client.page)
+      .getByRole("button", { name: "Продолжить" })
+      .click();
+    await expect(panel(client.page).getByLabel("На какой срок?")).toBeVisible();
+    await panel(client.page).getByLabel("На какой срок?").fill("12");
+    await panel(client.page)
+      .getByRole("button", { name: "Продолжить" })
+      .click();
+    await expect(
+      panel(client.page).getByText("Параметры готовы", { exact: false }),
+    ).toBeVisible();
+    await panel(client.page)
+      .getByRole("button", { name: "Проверить параметры заявки" })
       .click();
     const preview = client.page.getByRole("dialog", {
-      name: "Проверить предложенные изменения",
-      exact: true,
+      name: "Проверить предложенные параметры",
     });
-    await expect(preview).toContainText("Не задано → 1000000.00");
+    await expect(preview).toContainText("1000000.00");
     await preview.getByRole("button", { name: "Перенести в форму" }).click();
     await expect(client.page).toHaveURL(/\/app\/loans\/new/);
     await expect(
@@ -204,270 +111,322 @@ test("read-only draft suggestion → explicit preview → ordinary form @assista
       client.page.getByLabel("Срок, месяцев", { exact: true }),
     ).toHaveValue("12");
     await expect(
-      client.page.getByLabel("Цель кредита", { exact: true }),
-    ).toHaveValue("Закупка товара");
-    await expect(
       client.page.getByLabel("Месячная выручка, ₽", { exact: true }),
     ).toHaveValue("");
     const after = await (
       await client.context.request.get("/api/v1/applications/")
     ).json();
     expect(after.count).toBe(before.count);
-    expect(
-      await client.page.evaluate(() =>
-        Object.keys(sessionStorage)
-          .concat(Object.keys(localStorage))
-          .some((key) => /draft|message|conversation/i.test(key)),
-      ),
-    ).toBe(false);
   } finally {
     await client.context.close();
   }
 });
 
-test("form changed after answer is preserved, old suggestion cannot overwrite it @assistant @critical", async ({
+test("the current step survives reload and duplicate clicks do not send twice @assistant", async ({
   browser,
   sessions,
   baseURL,
 }) => {
   const client = await actor(browser, sessions, "client", baseURL!);
   try {
-    const catalog = await (
-      await client.context.request.get("/api/v1/products/")
-    ).json();
-    const product = catalog.results.find(
-      (item: Product) => item.code === "working-capital",
-    );
-    await client.page.goto(
-      `/app/loans/new?product=${product.id}&company=00000000-0000-0000-0000-000000000001`,
-    );
-    await expect(
-      client.page.getByLabel("Сумма, ₽", { exact: true }),
-    ).toHaveValue("1000000.00");
+    const app = await create(client.context);
+    await client.page.goto(`/app/loans/${app.id}`);
     await open(client.page);
-    await ask(client.page, "Оборотные: нужен миллион рублей на 12 месяцев");
-    await expect(
-      widget(client.page).getByRole("button", { name: "Проверить в заявке" }),
-    ).toBeVisible();
-    await widget(client.page)
-      .getByRole("button", { name: "Закрыть Савелия" })
-      .click();
-    await client.page.getByLabel("Сумма, ₽", { exact: true }).fill("1700000");
-    await open(client.page);
-    await widget(client.page)
-      .getByRole("button", { name: "Проверить в заявке" })
-      .click();
-    await expect(
-      widget(client.page).getByText(/Форма изменилась после вопроса/),
-    ).toBeVisible();
-    await widget(client.page)
-      .getByRole("button", { name: "Закрыть Савелия" })
-      .click();
-    await expect(
-      client.page.getByLabel("Сумма, ₽", { exact: true }),
-    ).toHaveValue("1700000");
-  } finally {
-    await client.context.close();
-  }
-});
-
-test("confirmation applies only permitted fields and preserves monthly inputs @assistant", async ({
-  browser,
-  sessions,
-  baseURL,
-}) => {
-  const client = await actor(browser, sessions, "client", baseURL!);
-  try {
-    const catalog = await (
-      await client.context.request.get("/api/v1/products/")
-    ).json();
-    const product = catalog.results.find(
-      (item: Product) => item.code === "working-capital",
-    );
-    await client.page.goto(
-      `/app/loans/new?product=${product.id}&company=00000000-0000-0000-0000-000000000001`,
-    );
-    await client.page
-      .getByLabel("Месячная выручка, ₽", { exact: true })
-      .fill("1234567");
-    await open(client.page);
-    await ask(client.page, "Оборотные: нужен миллион рублей на 12 месяцев");
-    await widget(client.page)
-      .getByRole("button", { name: "Проверить в заявке" })
-      .click();
-    const preview = client.page.getByRole("dialog", {
-      name: "Проверить предложенные изменения",
-      exact: true,
-    });
-    await expect(preview).toContainText("24 → 12");
-    await preview.getByRole("button", { name: "Перенести в форму" }).click();
-    await expect(
-      client.page.getByLabel("Срок, месяцев", { exact: true }),
-    ).toHaveValue("12");
-    await expect(
-      client.page.getByLabel("Месячная выручка, ₽", { exact: true }),
-    ).toHaveValue("1234567");
-  } finally {
-    await client.context.close();
-  }
-});
-
-test("route switch changes application context; history names actual application @assistant", async ({
-  browser,
-  sessions,
-  baseURL,
-}) => {
-  const client = await actor(browser, sessions, "client", baseURL!);
-  try {
-    const first = await create(client.context),
-      second = await create(client.context);
-    await client.page.goto(`/app/loans/${first.id}`);
-    await open(client.page);
-    const reply = await ask(client.page, "Какой статус моей заявки?");
-    expect(reply.message.application_id).toBe(first.id);
-    await expect(widget(client.page).getByRole("heading")).toContainText(
-      first.number,
-    );
-    await widget(client.page)
-      .getByRole("button", { name: "Закрыть Савелия" })
-      .click();
-    await client.page
-      .getByRole("link", { name: "Заявки и кредиты", exact: true })
-      .first()
-      .click();
-    await client.page
-      .getByRole("link")
-      .filter({ hasText: second.number })
-      .first()
-      .click();
-    await open(client.page);
-    await expect(widget(client.page).getByRole("heading")).toContainText(
-      second.number,
-    );
-    const fresh = await ask(client.page, "Какой статус моей заявки?");
-    expect(fresh.message.application_id).toBe(second.id);
-    await widget(client.page)
-      .getByRole("button", { name: "История", exact: true })
-      .click();
-    await expect(
-      widget(client.page).getByRole("button", {
-        name: new RegExp(first.number),
-      }),
-    ).toBeVisible();
-  } finally {
-    await client.context.close();
-  }
-});
-
-test("lost successful answer is recovered from real server history without repeat @assistant", async ({
-  browser,
-  sessions,
-  baseURL,
-}) => {
-  const client = await actor(browser, sessions, "client", baseURL!);
-  let posts = 0;
-  try {
-    await client.page.goto("/app");
-    await open(client.page);
-    await client.page.route(
-      /\/assistant\/conversations\/.+\/messages\//,
-      async (route) => {
-        if (route.request().method() !== "POST") return route.continue();
+    await expect(panel(client.page).getByText("С чем помочь?")).toBeVisible();
+    let posts = 0;
+    client.page.on("request", (request) => {
+      if (
+        /assistant\/conversations\/.+\/step\/$/.test(request.url()) &&
+        request.method() === "POST"
+      )
         posts++;
-        let status: number;
-        try {
-          status = (
-            await route.fetch({
-              timeout: 90_000,
-              maxRetries: 0,
-              maxRedirects: 0,
-            })
-          ).status();
-        } catch {
-          // Playwright's raw fetch errors include Cookie/CSRF request headers.
-          throw new Error("Assistant did not respond before simulated loss");
-        }
-        expect(
-          status,
-          "Simulate loss only after a successful real answer",
-        ).toBe(200);
-        await route.abort("failed");
+    });
+    const choice = panel(client.page).getByRole("button", {
+      name: "Рассчитать платёж",
+    });
+    await choice.dblclick();
+    await expect(
+      panel(client.page).getByText("Для какой задачи нужен кредит?"),
+    ).toBeVisible();
+    expect(posts).toBe(1);
+    await client.page.reload();
+    await open(client.page);
+    await expect(
+      panel(client.page).getByText("Для какой задачи нужен кредит?"),
+    ).toBeVisible();
+    await expect(panel(client.page).getByRole("textbox")).toHaveCount(0);
+  } finally {
+    await client.context.close();
+  }
+});
+
+test("input is preserved after a network failure, and the user can check server state @assistant", async ({
+  browser,
+  sessions,
+  baseURL,
+}) => {
+  const client = await actor(browser, sessions, "client", baseURL!);
+  try {
+    const app = await create(client.context);
+    await client.page.goto(`/app/loans/${app.id}`);
+    await open(client.page);
+    await expect(panel(client.page).getByText("С чем помочь?")).toBeVisible();
+    await panel(client.page)
+      .getByRole("button", { name: "Задать вопрос" })
+      .click();
+    const field = panel(client.page).getByLabel("Что хотите узнать?");
+    await field.fill("Какие документы нужны?");
+    await client.page.route(
+      "**/api/v1/assistant/conversations/*/step/",
+      async (route) => {
+        if (route.request().method() === "POST") await route.abort("failed");
+        else await route.continue();
       },
     );
-    await widget(client.page)
-      .getByLabel("Сообщение Савелию", { exact: true })
-      .fill("Какие данные нужны для заявки?");
-    await widget(client.page)
-      .getByRole("button", { name: "Отправить", exact: true })
+    await panel(client.page)
+      .getByRole("button", { name: "Продолжить" })
       .click();
+    await expect(field).toHaveValue("Какие документы нужны?");
     await expect(
-      widget(client.page).getByText(
-        "Ответ найден в истории. Повторная отправка не требуется.",
-        { exact: true },
-      ),
+      panel(client.page).getByRole("button", { name: "Проверить состояние" }),
     ).toBeVisible();
-    await expect(
-      widget(client.page).getByLabel("Сообщение Савелию", { exact: true }),
-    ).toHaveValue("");
-    expect(posts).toBe(1);
+    await client.page.unroute("**/api/v1/assistant/conversations/*/step/");
   } finally {
     await client.context.close();
   }
 });
 
-for (const status of [409, 429, 503]) {
-  test(`assistant HTTP ${status} preserves input and requires manual retry @assistant`, async ({
-    browser,
-    sessions,
-    baseURL,
-  }) => {
-    const client = await actor(browser, sessions, "client", baseURL!);
-    try {
-      await client.page.goto("/app");
-      await open(client.page);
-      let posts = 0;
-      await client.page.route(
-        /\/assistant\/conversations\/.+\/messages\//,
-        async (route) => {
-          if (route.request().method() !== "POST") return route.continue();
-          posts++;
-          await route.fulfill({
-            status,
-            headers: status === 429 ? { "Retry-After": "2" } : {},
-            json: { detail: "QA error" },
-          });
-        },
-      );
-      const input = widget(client.page).getByLabel("Сообщение Савелию", {
+test("an unavailable opening can be retried manually without a fabricated step @assistant", async ({
+  browser,
+  sessions,
+  baseURL,
+}) => {
+  const client = await actor(browser, sessions, "client", baseURL!);
+  try {
+    const app = await create(client.context);
+    await client.page.goto(`/app/loans/${app.id}`);
+    await client.page.route(
+      "**/api/v1/assistant/conversations/current/",
+      (route) =>
+        route.fulfill({
+          status: 503,
+          json: { detail: "Помощник временно недоступен." },
+        }),
+    );
+    await open(client.page);
+    await expect(panel(client.page).getByRole("alert")).toContainText(
+      "Помощник сейчас недоступен.",
+    );
+    await expect(
+      panel(client.page).getByRole("button", {
+        name: "Подготовить заявку",
         exact: true,
-      });
-      await input.fill("Ввод должен сохраниться");
-      const injected = client.page.waitForResponse(
-        (response) =>
-          response.request().method() === "POST" &&
-          /assistant\/conversations\/.+\/messages\//.test(response.url()) &&
-          response.status() === status,
+      }),
+    ).toHaveCount(0);
+    await client.page.unroute("**/api/v1/assistant/conversations/current/");
+    await panel(client.page)
+      .getByRole("button", {
+        name: "Попробовать подключиться снова",
+        exact: true,
+      })
+      .click();
+    await expect(
+      panel(client.page).getByText("С чем помочь?", { exact: true }),
+    ).toBeVisible();
+  } finally {
+    await client.context.close();
+  }
+});
+
+test("changing page during a delayed response restores usable actions in the new context @assistant", async ({
+  browser,
+  sessions,
+  baseURL,
+}) => {
+  const client = await actor(browser, sessions, "client", baseURL!);
+  let release = () => {};
+  try {
+    await client.page.setViewportSize({ width: 1440, height: 900 });
+    const app = await create(client.context);
+    const nextApp = await create(client.context);
+    await client.page.goto(`/app/loans/${app.id}`);
+    await open(client.page);
+    await expect(panel(client.page).getByText("С чем помочь?")).toBeVisible();
+    let entered = () => {};
+    const waiting = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await client.page.route(
+      "**/api/v1/assistant/conversations/*/step/",
+      async (route) => {
+        if (route.request().method() !== "POST") return route.continue();
+        const response = await route.fetch();
+        entered();
+        await gate;
+        await route.fulfill({ response }).catch(() => {});
+      },
+    );
+    await panel(client.page)
+      .getByRole("button", { name: "Подготовить заявку" })
+      .click();
+    await waiting;
+    const resumed = client.page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/assistant/conversations/current/") &&
+        response.request().postDataJSON()?.application_id === nextApp.id &&
+        response.ok(),
+    );
+    await client.page
+      .getByRole("navigation", { name: "Основная навигация" })
+      .getByRole("link", { name: "Заявки и кредиты", exact: true })
+      .click();
+    await expect(client.page).toHaveURL(/\/app\/loans$/);
+    await client.page
+      .getByRole("link", { name: new RegExp(nextApp.number) })
+      .click();
+    await expect(client.page).toHaveURL(
+      new RegExp(`/app/loans/${nextApp.id}/?$`),
+    );
+    const currentResponse = await resumed;
+    const currentState = (await currentResponse.json()) as AssistantStep;
+    await expect(
+      panel(client.page).getByRole("button", {
+        name: currentState.choices[0]!.label,
+        exact: true,
+      }),
+    ).toBeEnabled();
+    release();
+    await expect(
+      panel(client.page).getByRole("button", {
+        name: currentState.choices[0]!.label,
+        exact: true,
+      }),
+    ).toBeEnabled();
+  } finally {
+    release();
+    await client.context.close();
+  }
+});
+
+test("assistant panel fits viewports, uses keyboard focus and has no old chat controls @assistant-ui", async ({
+  browser,
+  sessions,
+  baseURL,
+}, info) => {
+  const client = await actor(browser, sessions, "client", baseURL!);
+  try {
+    await client.page.goto("/app");
+    for (const width of [360, 390, 768, 1024, 1440]) {
+      await client.page.setViewportSize({ width, height: 900 });
+      await open(client.page);
+      await expect(panel(client.page)).toHaveCSS(
+        "transform",
+        "matrix(1, 0, 0, 1, 0, 0)",
       );
-      await widget(client.page)
-        .getByRole("button", { name: "Отправить", exact: true })
-        .click();
-      await injected;
-      await expect(widget(client.page).getByRole("alert")).toBeVisible();
-      await expect(input).toHaveValue("Ввод должен сохраниться");
-      if (status === 429) {
+      await expect(
+        panel(client.page).getByText("История", { exact: true }),
+      ).toHaveCount(0);
+      await expect(
+        panel(client.page).getByRole("button", { name: "Новый чат" }),
+      ).toHaveCount(0);
+      await expect(
+        panel(client.page).getByRole("button", { name: "Удалить диалог" }),
+      ).toHaveCount(0);
+      const box = await panel(client.page).boundingBox();
+      expect(box!.x).toBeGreaterThanOrEqual(0);
+      expect(box!.x + box!.width).toBeLessThanOrEqual(width);
+      expect(
+        await client.page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+      ).toBe(true);
+      if (width === 360 || width === 1440) {
+        const result = await new AxeBuilder({ page: client.page })
+          .withTags(["wcag2a", "wcag2aa", "wcag21aa"])
+          .analyze();
+        expect(
+          result.violations.map((value) => ({
+            id: value.id,
+            nodes: value.nodes.map((node) => ({
+              target: node.target,
+              html: node.html,
+            })),
+          })),
+        ).toEqual([]);
+        await client.page.screenshot({
+          path: info.outputPath(`assistant-${width}.png`),
+        });
+      }
+      await client.page.keyboard.press("Escape");
+      await expect(panel(client.page)).toBeHidden();
+      if (width <= 1100)
+        await expect
+          .poll(async () => {
+            const box = await client.page
+              .getByRole("button", { name: "Помощник по кредиту" })
+              .boundingBox();
+            return box?.width;
+          })
+          .toBe(48);
+      else
         await expect(
-          widget(client.page).getByText(/Повторная отправка доступна через/),
-        ).toBeVisible();
-        await expect(
-          widget(client.page).getByRole("button", {
-            name: "Отправить",
+          client.page.getByRole("button", {
+            name: "Помощник по кредиту",
             exact: true,
           }),
-        ).toBeDisabled();
-      }
-      expect(posts).toBe(1);
-    } finally {
-      await client.context.close();
+        ).toContainText("Помощник по кредиту");
     }
-  });
-}
+  } finally {
+    await client.context.close();
+  }
+});
+
+test("a typed question receives a real model response with server product facts @assistant-live", async ({
+  browser,
+  sessions,
+  baseURL,
+}) => {
+  test.skip(
+    process.env.E2E_LIVE_MODEL !== "true",
+    "Requires a configured real model",
+  );
+  const client = await actor(browser, sessions, "client", baseURL!);
+  try {
+    const app = await create(client.context);
+    await client.page.goto(`/app/loans/${app.id}`);
+    await open(client.page);
+    await panel(client.page)
+      .getByRole("button", { name: "Задать вопрос", exact: true })
+      .click();
+    await panel(client.page)
+      .getByRole("textbox", { name: "Что хотите узнать?", exact: true })
+      .fill("Какие кредитные продукты доступны?");
+    const answering = client.page.waitForResponse(
+      (response) =>
+        /assistant\/conversations\/.+\/step\/$/.test(response.url()) &&
+        response.request().method() === "POST",
+      { timeout: 90_000 },
+    );
+    await panel(client.page)
+      .getByRole("button", { name: "Продолжить", exact: true })
+      .click();
+    const response = await answering;
+    expect(response.ok()).toBe(true);
+    const result = (await response.json()) as AssistantStep;
+    expect(result.mode, result.error_code || result.prompt).toBe("result");
+    expect(result.message?.model_status).toBe("available");
+    expect(
+      result.message?.facts.some(
+        (fact) => fact.source === "list_credit_products",
+      ),
+    ).toBe(true);
+    await expect(
+      panel(client.page).getByText("Оборотные средства", { exact: true }),
+    ).toBeVisible();
+  } finally {
+    await client.context.close();
+  }
+});

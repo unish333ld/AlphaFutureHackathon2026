@@ -52,8 +52,14 @@ test("required login errors are associated with fields and typing clears them", 
   const password = page.getByLabel("Пароль", { exact: true });
   await expect(username).toHaveAttribute("aria-invalid", "true");
   await expect(password).toHaveAttribute("aria-invalid", "true");
+  await expect(username).toBeEnabled();
+  await expect(password).toBeEnabled();
   await username.pressSequentially("client");
   await password.pressSequentially(process.env.DEMO_PASSWORD!);
+  await expect(username).toHaveValue("client");
+  expect(
+    (await password.inputValue()) === process.env.DEMO_PASSWORD,
+  ).toBeTruthy();
   await password.press("Enter");
   await expect(
     page.getByRole("heading", { name: /Здравствуйте/ }),
@@ -182,7 +188,7 @@ test("an anonymous session check during login cannot invalidate the new session"
       page.getByRole("dialog", { name: "Сессия требует входа" }),
     ).toHaveCount(0);
     await expect(
-      page.getByRole("button", { name: "Выйти", exact: true }),
+      page.getByRole("button", { name: "Выйти из кабинета", exact: true }),
     ).toBeVisible();
   } finally {
     releaseLogin();

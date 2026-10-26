@@ -1,6 +1,11 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "./auth";
-import { api } from "../shared/api/client";
+import {
+  api,
+  type Application,
+  type Page,
+  type Schema,
+} from "../shared/api/client";
 
 export function useScope(company = "all") {
   const { user } = useAuth();
@@ -29,14 +34,48 @@ export function useApplication(id: string) {
     queryFn: ({ signal }) =>
       api.application(id, user?.system_role === "specialist", signal),
     refetchInterval: (query) =>
-      query.state.data?.status === "signed" ? 5000 : false,
+      [
+        "submitted",
+        "checking",
+        "review",
+        "needs_info",
+        "offered",
+        "accepted",
+        "signed",
+      ].includes(query.state.data?.status ?? "")
+        ? 5000
+        : false,
   });
 }
 export function useRefreshCredit() {
   const { user } = useAuth();
   const client = useQueryClient();
-  return async () => {
+  return async (updated?: Application) => {
     if (!user) return;
+    if (updated) {
+      client.setQueriesData<Page<Schema["ApplicationList"]>>(
+        {
+          queryKey: ["user", user.id],
+          predicate: (query) => query.queryKey.includes("applications"),
+        },
+        (page) =>
+          page
+            ? {
+                ...page,
+                results: page.results.map((row) =>
+                  row.id === updated.id
+                    ? {
+                        ...row,
+                        status: updated.status,
+                        lock_version: updated.lock_version,
+                        updated_at: updated.updated_at,
+                      }
+                    : row,
+                ),
+              }
+            : page,
+      );
+    }
     await client.invalidateQueries({
       queryKey: ["user", user.id],
       predicate: (query) =>

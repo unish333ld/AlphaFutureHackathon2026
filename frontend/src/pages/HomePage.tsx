@@ -16,7 +16,7 @@ import {
 import { PageTitle } from "../shared/ui/PageTitle";
 import { LinkButton } from "../shared/ui/navigation";
 import { LoanRows } from "../features/LoanRows";
-import { money, rate } from "../entities/credit";
+import { displayName, money, rate } from "../entities/credit";
 import s from "../app/layout.module.css";
 
 export default function HomePage() {
@@ -27,7 +27,10 @@ export default function HomePage() {
   const list = useQuery({
     queryKey: [...scope, "applications", 1, "all"],
     queryFn: ({ signal }) => api.applications(1, undefined, signal),
+    refetchInterval: 10000,
   });
+  const informationRequests =
+    list.data?.results.filter((row) => row.status === "needs_info") ?? [];
   const company =
     companies.data?.find((item) => item.id === companyId) ??
     companies.data?.[0];
@@ -39,15 +42,27 @@ export default function HomePage() {
         subtitle="Что сегодня нужно вашему бизнесу?"
         eyebrow="Кабинет предпринимателя"
       />
-      {list.data?.results.some((row) => row.status === "needs_info") ? (
-        <Notice tone="warning" title="Банк запросил дополнительные сведения">
-          <div className={s.summaryRow}>
-            <span>В одной из последних заявок нужен ваш ответ.</span>
-            <LinkButton
-              to={`/app/loans/${list.data.results.find((row) => row.status === "needs_info")?.id}/`}
-            >
-              Посмотреть запрос
-            </LinkButton>
+      {informationRequests.length ? (
+        <Notice
+          tone="warning"
+          title={
+            informationRequests.length === 1
+              ? "Проверьте данные заявки"
+              : "Проверьте данные заявок"
+          }
+        >
+          <div className={s.stack}>
+            {informationRequests.map((application) => (
+              <div className={s.summaryRow} key={application.id}>
+                <span>
+                  Заявка {application.number}. Специалист попросил проверить
+                  введённые сведения.
+                </span>
+                <LinkButton to={`/app/loans/${application.id}/`}>
+                  Открыть заявку {application.number}
+                </LinkButton>
+              </div>
+            ))}
           </div>
         </Notice>
       ) : null}
@@ -78,14 +93,14 @@ export default function HomePage() {
                 <span className={s.tileIcon} aria-hidden="true">
                   {product.code === "equipment" ? "⚙" : "↗"}
                 </span>
-                <h3>{product.name}</h3>
-                <p>{product.description}</p>
+                <h3>{displayName(product.name)}</h3>
                 <strong>
                   {money(product.min_amount)} — {money(product.max_amount)}
                 </strong>
                 <p>
-                  {product.min_term_months}–{product.max_term_months} мес. ·
-                  базовая ставка демо {rate(product.annual_rate)}
+                  {product.min_term_months}–{product.max_term_months} мес.
+                  <br />
+                  Предварительная ставка {rate(product.annual_rate)}
                 </p>
                 <span className={s.link}>Создать заявку →</span>
               </Link>
@@ -154,7 +169,7 @@ export default function HomePage() {
                 onChange={setCompanyId}
                 options={companies.data.map((item) => ({
                   key: item.id,
-                  content: item.name,
+                  content: displayName(item.name),
                 }))}
               />
               <Facts
@@ -180,10 +195,6 @@ export default function HomePage() {
                   },
                 ]}
               />
-              <p className={s.muted}>
-                Сведения получены из синтетического профиля. Финансовые
-                показатели вы укажете в заявке.
-              </p>
             </div>
           )}
         </Panel>

@@ -34,7 +34,9 @@ test("a delayed pre-logout /me response cannot restore a previous user", async (
     });
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
     await intercepted;
-    await page.getByRole("button", { name: "Выйти", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Выйти из кабинета", exact: true })
+      .click();
     await page
       .getByRole("dialog")
       .getByRole("button", { name: "Завершить сессию", exact: true })

@@ -11,9 +11,23 @@ test("real queue pagination, typed search, native filters and own release", asyn
     const initial = await (
       await staff.context.request.get("/api/v1/staff/applications/")
     ).json();
-    for (let count = initial.count; count < 26; count++)
+    for (let count = initial.count; count < 12; count++)
       await create(client.context);
     const app = await create(client.context);
+    const first = await (
+      await staff.context.request.get("/api/v1/staff/applications/?page=1")
+    ).json();
+    const second = await (
+      await staff.context.request.get("/api/v1/staff/applications/?page=2")
+    ).json();
+    expect(first.results).toHaveLength(10);
+    expect(
+      new Set(
+        [...first.results, ...second.results].map(
+          (row: { id: string }) => row.id,
+        ),
+      ).size,
+    ).toBe(first.results.length + second.results.length);
     await staff.page.goto("/staff");
     await expect(
       staff.page.getByRole("button", {
@@ -29,7 +43,7 @@ test("real queue pagination, typed search, native filters and own release", asyn
       .getByLabel("Поиск по номеру, компании или ИНН", { exact: true })
       .fill(app.number);
     await expect(
-      staff.page.getByRole("link", { name: app.number, exact: true }).first(),
+      staff.page.getByRole("link", { name: new RegExp(app.number) }).first(),
     ).toBeVisible();
     await expect(staff.page).not.toHaveURL(/page=2/);
     await staff.page
@@ -42,7 +56,7 @@ test("real queue pagination, typed search, native filters and own release", asyn
       .getByRole("button", { name: "Свободные", exact: true })
       .click();
     await expect(
-      staff.page.getByRole("link", { name: app.number, exact: true }).first(),
+      staff.page.getByRole("link", { name: new RegExp(app.number) }).first(),
     ).toBeVisible();
     await showApp(staff.page, app, true);
     await staff.page

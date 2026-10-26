@@ -16,6 +16,8 @@ from rest_framework.views import APIView
 from agreements import services as deal
 from agreements.models import Agreement, AgreementDocument, Disbursement
 from api.agreement_documents import AgreementDocumentsMixin
+from api.notifications import NotificationsMixin
+from api.pagination import TenItemPagination
 from api.selectors import application_queryset, staff_queue_queryset
 from api.serializers import (
     AgreementSerializer,
@@ -98,8 +100,8 @@ class CompanyViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 @extend_schema_view(
-    list=extend_schema(tags=["Продукты"], summary="Демонстрационный каталог"),
-    retrieve=extend_schema(tags=["Продукты"], summary="Условия демо-продукта"),
+    list=extend_schema(tags=["Продукты"], summary="Каталог кредитных продуктов"),
+    retrieve=extend_schema(tags=["Продукты"], summary="Условия кредитного продукта"),
 )
 class ProductViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = CreditProduct.objects.filter(active=True)
@@ -112,7 +114,7 @@ class CalculatorView(APIView):
         request=PaymentRequestSerializer,
         responses=PaymentResponseSerializer,
         summary="Предварительный аннуитетный расчёт",
-        description="Учебный аннуитет и подробная стоимость: равные месячные периоды, комиссии/услуги исключены политикой демо. Передайте product: ставка и границы берутся с сервера. Альтернатива — annual_rate для самостоятельного расчёта, не банковского предложения. Последний платёж корректирует округление; юридическая ПСК не рассчитывается.",
+        description="Предварительный расчёт по равным месячным периодам. При выборе product ставка и границы берутся из каталога. Поле annual_rate подходит только для самостоятельного расчёта. Последний платёж учитывает округление. Комиссии и услуги не включены; юридическая ПСК не рассчитывается.",
         examples=[
             OpenApiExample(
                 "Пример",
@@ -181,6 +183,7 @@ class ApplicationQueryMixin:
     ),
 )
 class ApplicationViewSet(
+    NotificationsMixin,
     ApplicationQueryMixin,
     mixins.CreateModelMixin,
     mixins.ListModelMixin,
@@ -273,7 +276,7 @@ class ApplicationViewSet(
         tags=["Заявки"],
         request=RevisionSubmitSerializer,
         responses=ACTION_RESPONSES,
-        summary="Ответить на уточнение новой ревизией",
+        summary="Отправить проверенные данные заявки",
     )
     @action(detail=True, methods=["post"], url_path="provide-information")
     def provide_information(self, request, pk=None):
@@ -303,7 +306,7 @@ class ApplicationViewSet(
     @extend_schema(
         tags=["Заявки"], responses=EventSerializer(many=True), summary="История переходов заявки"
     )
-    @action(detail=True, methods=["get"])
+    @action(detail=True, methods=["get"], pagination_class=TenItemPagination)
     def events(self, request, pk=None):
         app = self.get_object()
         page = self.paginate_queryset(app.events.all())
@@ -315,7 +318,7 @@ class ApplicationViewSet(
         tags=["Банк"],
         summary="Очередь специалиста",
         parameters=[StaffQueueQuerySerializer],
-        description="Пагинация по 25 строк, стабильная сортировка с UUID как вторичным ключом; NULL в конце. assignment=free — свободные, mine — назначенные текущему специалисту, all — все. risk_level=unassessed — оценка отсутствует. search — подстрока номера/названия компании/ИНН. amount, term_months и risk_level относятся строго к максимальному revision_no. История ревизий в строки не включается. status_changed_at — фактическое начало текущего кредитного статуса, не SLA банка.",
+        description="До 10 заявок на странице. Сортировка стабильна: при равных значениях используется ID. assignment=free — свободные, mine — ваши, all — все. risk_level=unassessed — без оценки. search ищет по номеру, компании и ИНН. Сумма, срок и риск относятся к актуальной версии заявки. status_changed_at показывает время с начала текущего статуса, это не SLA.",
     ),
     retrieve=extend_schema(tags=["Банк"], summary="Карточка специалиста"),
 )
@@ -325,6 +328,7 @@ class StaffApplicationViewSet(
     queryset = Application.objects.none()
     permission_classes = [IsSpecialist]
     serializer_class = ApplicationSerializer
+    pagination_class = TenItemPagination
 
     def get_serializer_class(self):
         return StaffApplicationListSerializer if self.action == "list" else ApplicationSerializer
@@ -405,7 +409,7 @@ class StaffApplicationViewSet(
         tags=["Банк"],
         request=InformationRequestInputSerializer,
         responses=ACTION_RESPONSES,
-        summary="Запросить уточнение у компании",
+        summary="Запросить проверку введённых данных",
         description="Только назначенный текущий specialist, статусы review/checking. Свободная или чужая заявка — 409. Переход в needs_info сохраняет исполнителя; клиент отвечает новой ревизией, проверки и оценка выполняются заново.",
     )
     @action(detail=True, methods=["post"], url_path="request-information")
@@ -424,7 +428,7 @@ class StaffApplicationViewSet(
         tags=["Банк"],
         request=VersionSerializer,
         responses=ACTION_RESPONSES,
-        summary="Принять решение по демонстрационной политике",
+        summary="Принять решение по серверным правилам",
         description="Только назначенный текущий specialist, статус review и актуальный lock_version. Сотрудник запускает серверную политику; тело не принимает исход, ставку или сумму. Используется assessment текущей (максимальный revision_no) отправленной ревизии и её checks_attempt: полный набор registry/credit_history/financial без missing/error, оценка создана после этих проверок. Новая попытка делает старую оценку непригодной. Результат approved/counteroffer/rejected, reason_code, explanation, policy_version и offer находятся в revisions[0].assessment.decision; ссылки assessment/revision и checks_attempt явные. Повтор после решения — 409, нового решения/предложения не создаёт. Конфликт назначения, версии, состояния или устаревшей оценки — 409: обновите карточку и предложите пользователю проверить данные. Положительный результат сохраняет исполнителя при ожидании клиента; отказ освобождает назначение.",
     )
     @action(detail=True, methods=["post"])
@@ -483,7 +487,7 @@ class OfferViewSet(viewsets.ReadOnlyModelViewSet):
         tags=["Предложения"],
         request=VersionSerializer,
         responses=ACTION_RESPONSES,
-        summary="Принять предложение и сформировать демо-договор",
+        summary="Принять предложение и сформировать договор",
     )
     @action(detail=True, methods=["post"])
     def accept(self, request, pk=None):
@@ -501,7 +505,7 @@ class OfferViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 @extend_schema_view(
-    list=extend_schema(tags=["Договоры"], summary="Доступные демо-договоры"),
+    list=extend_schema(tags=["Договоры"], summary="Доступные договоры"),
     retrieve=extend_schema(tags=["Договоры"], summary="Зафиксированные условия и SHA-256"),
 )
 class AgreementViewSet(AgreementDocumentsMixin, viewsets.ReadOnlyModelViewSet):

@@ -26,6 +26,7 @@ export default function LoansPage() {
   const list = useQuery({
     queryKey: [...scope, "applications", page, status ?? "all"],
     queryFn: ({ signal }) => api.applications(page, status, signal),
+    refetchInterval: 10000,
   });
   function change(value: string) {
     setParams(value ? { status: value } : {});
@@ -34,7 +35,7 @@ export default function LoansPage() {
     <>
       <PageTitle
         title="Заявки и кредиты"
-        subtitle="Черновики, рассмотрение, предложения и моделируемые выдачи всех доступных компаний."
+        subtitle="Черновики, заявки на рассмотрении и кредиты ваших компаний."
         action={
           <LinkButton to="/app/loans/new" view="accent">
             + Новая заявка
@@ -56,15 +57,6 @@ export default function LoansPage() {
             ]}
           />
         </div>
-        <Button
-          size={40}
-          onClick={() => {
-            void list.refetch();
-          }}
-          disabled={list.isFetching}
-        >
-          Обновить
-        </Button>
       </div>
       <Panel>
         {list.isPending ? (

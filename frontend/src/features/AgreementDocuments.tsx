@@ -11,12 +11,10 @@ export function PdfLinks({
   agreement: Agreement;
   kind?: "original" | "signed_copy";
 }) {
-  const [viewer, setViewer] = useState(false);
   const doc = agreement.documents.find((value) => value.kind === kind);
   if (!doc) return null;
   const url = `/api/v1/agreements/${agreement.id}/pdf/?kind=${kind}`;
-  const name =
-    kind === "original" ? "исходный договор" : "копию с демо-отметкой";
+  const name = kind === "original" ? "договор" : "подписанную копию";
   return (
     <section aria-label={`PDF: ${name}`} className={s.stack}>
       <div className={s.links}>
@@ -24,27 +22,7 @@ export function PdfLinks({
           Открыть {name} (PDF)
         </a>
         <a href={`${url}&download=true`}>Скачать {name} (PDF)</a>
-        <Button size={40} onClick={() => setViewer(!viewer)}>
-          {viewer ? "Скрыть просмотр PDF" : "Встроенный просмотр PDF"}
-        </Button>
       </div>
-      {viewer ? (
-        <>
-          <iframe
-            className={s.viewer}
-            title={`Просмотр PDF: ${name}`}
-            src={url}
-          />
-          <p>
-            Если браузер не поддерживает просмотр PDF, воспользуйтесь ссылками
-            открытия и скачивания выше. Финансовые условия и график также
-            доступны на странице.
-          </p>
-        </>
-      ) : null}
-      <p className={s.hash}>
-        Версия {doc.version}. SHA-256 PDF: <code>{doc.pdf_sha256}</code>
-      </p>
     </section>
   );
 }
@@ -129,8 +107,7 @@ export function AgreementDocuments({
         ) : (
           <>
             <Notice tone="warning">
-              Подпись сохранена. Копия PDF с отметкой подтверждения пока
-              недоступна. Формирование копии не подписывает договор повторно.
+              Договор подписан. Копия PDF пока недоступна.
             </Notice>
             {capable ? (
               <Button
@@ -139,7 +116,7 @@ export function AgreementDocuments({
                 loading={busy}
                 onClick={() => void generate(true)}
               >
-                Сформировать копию с демо-отметкой
+                Повторить создание копии
               </Button>
             ) : null}
           </>

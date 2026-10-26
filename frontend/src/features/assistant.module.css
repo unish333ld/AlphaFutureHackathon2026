@@ -7,6 +7,17 @@
 .launcher[hidden] {
   display: none;
 }
+@media (max-width: 1100px) {
+  .launcherText {
+    display: none;
+  }
+  .launcher > button {
+    width: 48px;
+    min-width: 48px;
+    height: 48px;
+    padding: 0;
+  }
+}
 .window {
   position: fixed;
   inset: 0 0 0 auto;
@@ -21,6 +32,15 @@
   border-left: 1px solid #dfe3e8;
   box-shadow: -4px 0 20px #1822300a;
   color: #202329;
+  transform: translateX(100%);
+  visibility: hidden;
+  transition:
+    transform 220ms ease,
+    visibility 220ms;
+}
+.windowOpen {
+  transform: translateX(0);
+  visibility: visible;
 }
 .header {
   display: flex;
@@ -51,50 +71,40 @@
   font-size: 14px;
   overflow-wrap: anywhere;
 }
-.toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-.messages {
+.stepContent {
   flex: 1;
   min-height: 0;
-  padding: 16px;
   overflow-y: auto;
+  padding: 20px 16px;
   overscroll-behavior: contain;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+  animation: stepIn 180ms ease both;
 }
-.messages > * {
-  flex-shrink: 0;
+.stepHeading h3 {
+  font-size: 20px;
+  margin: 0 0 10px;
+  line-height: 1.3;
 }
-.messages p {
-  margin: 4px 0;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+.stepHeading p {
+  margin: 0 0 18px;
+  line-height: 1.5;
 }
-.messages ul {
-  margin: 8px 0;
-  padding-left: 20px;
+@keyframes stepIn {
+  from {
+    transform: translateY(5px);
+  }
+  to {
+    transform: translateY(0);
+  }
 }
-.userMessage,
 .assistantMessage {
   max-width: 100%;
   line-height: 1.55;
   overflow-wrap: anywhere;
 }
-.userMessage {
-  border-radius: 12px;
-  background: #f3f4f6;
-  padding: 12px;
-  margin-left: 20px;
-}
 .assistantMessage {
   border-bottom: 1px solid #e3e6eb;
   padding-bottom: 12px;
 }
-.userMessage > strong,
 .assistantMessage > strong {
   color: #4c5562;
   font-size: 13px;
@@ -137,10 +147,6 @@
   gap: 12px;
   margin-top: 10px;
 }
-.sendRow small {
-  font-size: 13px;
-  color: #4c5562;
-}
 .sendRow > button {
   flex-shrink: 0;
 }
@@ -167,42 +173,17 @@
   opacity: 0.55;
   cursor: default;
 }
+@media (prefers-reduced-motion: reduce) {
+  .window {
+    transition: none;
+  }
+  .stepContent {
+    animation: none;
+  }
+}
 .window :focus-visible {
   outline: 2px solid #d02a20;
   outline-offset: 3px;
-}
-.historyList {
-  flex: 1;
-  min-height: 0;
-  padding: 16px;
-  overflow-y: auto;
-}
-.historyItem {
-  display: grid;
-  gap: 5px;
-  width: 100%;
-  padding: 12px 8px;
-  margin-bottom: 8px;
-  border: 1px solid #dfe3e8;
-  border-radius: 8px;
-  background: #fff;
-  text-align: left;
-  font: inherit;
-  overflow-wrap: anywhere;
-  cursor: pointer;
-}
-.historyItem:hover {
-  background: #f3f4f6;
-}
-.historyItem small {
-  font-size: 13px;
-  color: #4c5562;
-}
-.pageButtons {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
 }
 @media (min-width: 1180px) {
   :global(body[data-assistant-open="true"] #root) {
@@ -226,6 +207,11 @@
     bottom: max(16px, env(safe-area-inset-bottom));
   }
 }
+@media (min-width: 601px) and (max-width: 800px) {
+  .launcher {
+    right: 0;
+  }
+}
 @media (max-height: 500px) {
   .window {
     overflow-y: auto;
@@ -241,9 +227,6 @@
   }
   .context {
     padding: 6px 12px;
-  }
-  .messages {
-    min-height: 60px;
   }
   .composer {
     flex-shrink: 0;

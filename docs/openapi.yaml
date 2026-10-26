@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Умный кредитный кабинет предпринимателя
-  version: 1.3.0
+  version: 1.4.0
   description: 'Хакатонный backend: синтетические компании, локальные проверки, условная
     подпись и моделируемая выдача. Деньги передаются строками в рублях, сроки — в
     месяцах. Для Try it out [войдите в сессию](/api/session/login/) в той же вкладке.
@@ -11,7 +11,7 @@ paths:
   /api/v1/agreements/:
     get:
       operationId: v1_agreements_list
-      summary: Доступные демо-договоры
+      summary: Доступные договоры
       parameters:
       - name: page
         required: false
@@ -1431,7 +1431,7 @@ paths:
   /api/v1/applications/{id}/provide-information/:
     post:
       operationId: v1_applications_provide_information_create
-      summary: Ответить на уточнение новой ревизией
+      summary: Отправить проверенные данные заявки
       parameters:
       - in: path
         name: id
@@ -1868,10 +1868,93 @@ paths:
                   summary: Пример ошибки
           description: PostgreSQL временно недоступен или истёк таймаут блокировки.
             Проверьте карточку перед повтором значимого действия.
+  /api/v1/applications/notifications/:
+    get:
+      operationId: v1_applications_notifications_retrieve
+      summary: Новые результаты рассмотрения
+      parameters:
+      - in: query
+        name: cursor
+        schema:
+          type: string
+        description: Указатель из предыдущего ответа. Без него возвращается только
+          исходная отметка, без старых уведомлений.
+      tags:
+      - Заявки
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationBatch'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
   /api/v1/assistant/conversations/:
     get:
       operationId: v1_assistant_conversations_list
-      summary: Мои диалоги
+      summary: Сохранённые диалоги
       parameters:
       - name: page
         required: false
@@ -1880,7 +1963,7 @@ paths:
         schema:
           type: integer
       tags:
-      - Савелий
+      - Помощник по кредиту
       security:
       - cookieAuth: []
       responses:
@@ -1955,7 +2038,7 @@ paths:
       operationId: v1_assistant_conversations_create
       summary: Начать диалог для своей компании
       tags:
-      - Савелий
+      - Помощник по кредиту
       requestBody:
         content:
           application/json:
@@ -2063,7 +2146,7 @@ paths:
           format: uuid
         required: true
       tags:
-      - Савелий
+      - Помощник по кредиту
       security:
       - cookieAuth: []
       responses:
@@ -2144,7 +2227,7 @@ paths:
         повтора; 429 — соблюдения Retry-After. application_version фиксирует версию
         заявки на момент ответа. Перед переносом suggested_draft проверить неизменность
         формы и показать подтверждение. История ограничена AI_HISTORY_DAYS.
-      summary: Спросить Савелия
+      summary: Задать вопрос помощнику
       parameters:
       - in: path
         name: conversation_id
@@ -2153,7 +2236,7 @@ paths:
           format: uuid
         required: true
       tags:
-      - Савелий
+      - Помощник по кредиту
       requestBody:
         content:
           application/json:
@@ -2189,8 +2272,8 @@ paths:
               examples:
                 ПомощникНедоступен:
                   value:
-                    detail: Савелий сейчас недоступен. Кредитный кабинет работает
-                      без помощника.
+                    detail: Помощник сейчас недоступен. Заявку можно продолжить без
+                      него.
                     code: assistant_unavailable
                   summary: Помощник недоступен
           description: AI отключён, провайдер недоступен, контекст слишком велик или
@@ -2259,7 +2342,7 @@ paths:
   /api/v1/assistant/conversations/{id}/:
     get:
       operationId: v1_assistant_conversations_retrieve
-      summary: Мой диалог
+      summary: Сохранённый диалог
       parameters:
       - in: path
         name: id
@@ -2269,7 +2352,7 @@ paths:
         description: A UUID string identifying this Диалог Савелия.
         required: true
       tags:
-      - Савелий
+      - Помощник по кредиту
       security:
       - cookieAuth: []
       responses:
@@ -2342,7 +2425,7 @@ paths:
             Проверьте карточку перед повтором значимого действия.
     delete:
       operationId: v1_assistant_conversations_destroy
-      summary: Удалить мой диалог и все сообщения
+      summary: Удалить диалог и его сообщения
       parameters:
       - in: path
         name: id
@@ -2352,7 +2435,7 @@ paths:
         description: A UUID string identifying this Диалог Савелия.
         required: true
       tags:
-      - Савелий
+      - Помощник по кредиту
       security:
       - cookieAuth: []
       responses:
@@ -2419,14 +2502,315 @@ paths:
                   summary: Пример ошибки
           description: PostgreSQL временно недоступен или истёк таймаут блокировки.
             Проверьте карточку перед повтором значимого действия.
+  /api/v1/assistant/conversations/{id}/step/:
+    get:
+      operationId: v1_assistant_conversations_step_retrieve
+      description: Сверяйте состояние после сетевой ошибки. waiting означает, что
+        запрос ещё выполняется. Повторная отправка автоматически не нужна.
+      summary: Получить актуальный шаг
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Диалог Савелия.
+        required: true
+      tags:
+      - Помощник по кредиту
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssistantStep'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
+    post:
+      operationId: v1_assistant_conversations_step_create
+      description: Передайте step_id, expected_version и уникальный request_id. На
+        choice допустим только актуальный action_id, на input только text. Старый
+        шаг или чужой вариант возвращает 409 до выполнения инструмента. Повтор request_id
+        не выполняет операцию снова. HTTP 200 с mode=error сообщает о сохранённом
+        сбое, а не об успешном ответе.
+      summary: Ответить на текущий шаг
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        description: A UUID string identifying this Диалог Савелия.
+        required: true
+      tags:
+      - Помощник по кредиту
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StepActionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StepActionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StepActionRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssistantStep'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Загрузите заявку заново.
+                    code: stale_version
+                  summary: Пример ошибки
+          description: Конфликт версии, назначения или состояния. GET карточки, проверка
+            пользователем; не повторяйте действие автоматически.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
+  /api/v1/assistant/conversations/current/:
+    post:
+      operationId: v1_assistant_conversations_current_create
+      description: Возвращает текущий шаг пользователя в выбранной компании и заявке.
+        История не удаляется. Повторное открытие восстанавливает тот же сценарий.
+      summary: Продолжить текущий сценарий
+      tags:
+      - Помощник по кредиту
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateConversationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CreateConversationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CreateConversationRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssistantStep'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    amount:
+                    - Сумма вне границ продукта.
+                  summary: Пример ошибки
+          description: Неверный JSON, поля или параметры. Исправьте форму.
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Действие недоступно.
+                    code: permission_denied
+                  summary: Пример ошибки
+          description: Нет сессии, полномочий или корректного CSRF.
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Не найдено.
+                  summary: Пример ошибки
+          description: Ресурс не существует или скрыт company scope; также страница
+            пагинации вне диапазона.
+        '429':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Слишком много запросов.
+                    code: throttled
+                  summary: Пример ошибки
+          description: Лимит запросов. Учитывайте Retry-After.
+        '503':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Сервис временно недоступен.
+                    code: dependency_unavailable
+                  summary: Пример ошибки
+          description: PostgreSQL временно недоступен или истёк таймаут блокировки.
+            Проверьте карточку перед повтором значимого действия.
+        '409':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                ПримерОшибки:
+                  value:
+                    detail: Загрузите заявку заново.
+                    code: stale_version
+                  summary: Пример ошибки
+          description: Конфликт версии, назначения или состояния. GET карточки, проверка
+            пользователем; не повторяйте действие автоматически.
   /api/v1/calculator/payment/:
     post:
       operationId: v1_calculator_payment_create
-      description: 'Учебный аннуитет и подробная стоимость: равные месячные периоды,
-        комиссии/услуги исключены политикой демо. Передайте product: ставка и границы
-        берутся с сервера. Альтернатива — annual_rate для самостоятельного расчёта,
-        не банковского предложения. Последний платёж корректирует округление; юридическая
-        ПСК не рассчитывается.'
+      description: Предварительный расчёт по равным месячным периодам. При выборе
+        product ставка и границы берутся из каталога. Поле annual_rate подходит только
+        для самостоятельного расчёта. Последний платёж учитывает округление. Комиссии
+        и услуги не включены; юридическая ПСК не рассчитывается.
       summary: Предварительный аннуитетный расчёт
       tags:
       - Продукты
@@ -3165,7 +3549,7 @@ paths:
   /api/v1/offers/{id}/accept/:
     post:
       operationId: v1_offers_accept_create
-      summary: Принять предложение и сформировать демо-договор
+      summary: Принять предложение и сформировать договор
       parameters:
       - in: path
         name: id
@@ -3383,7 +3767,7 @@ paths:
   /api/v1/products/:
     get:
       operationId: v1_products_list
-      summary: Демонстрационный каталог
+      summary: Каталог кредитных продуктов
       parameters:
       - name: page
         required: false
@@ -3466,7 +3850,7 @@ paths:
   /api/v1/products/{id}/:
     get:
       operationId: v1_products_retrieve
-      summary: Условия демо-продукта
+      summary: Условия кредитного продукта
       parameters:
       - in: path
         name: id
@@ -3790,13 +4174,11 @@ paths:
   /api/v1/staff/applications/:
     get:
       operationId: v1_staff_applications_list
-      description: Пагинация по 25 строк, стабильная сортировка с UUID как вторичным
-        ключом; NULL в конце. assignment=free — свободные, mine — назначенные текущему
-        специалисту, all — все. risk_level=unassessed — оценка отсутствует. search
-        — подстрока номера/названия компании/ИНН. amount, term_months и risk_level
-        относятся строго к максимальному revision_no. История ревизий в строки не
-        включается. status_changed_at — фактическое начало текущего кредитного статуса,
-        не SLA банка.
+      description: 'До 10 заявок на странице. Сортировка стабильна: при равных значениях
+        используется ID. assignment=free — свободные, mine — ваши, all — все. risk_level=unassessed
+        — без оценки. search ищет по номеру, компании и ИНН. Сумма, срок и риск относятся
+        к актуальной версии заявки. status_changed_at показывает время с начала текущего
+        статуса, это не SLA.'
       summary: Очередь специалиста
       parameters:
       - in: query
@@ -4186,7 +4568,7 @@ paths:
         или устаревшей оценки — 409: обновите карточку и предложите пользователю проверить
         данные. Положительный результат сохраняет исполнителя при ожидании клиента;
         отказ освобождает назначение.'
-      summary: Принять решение по демонстрационной политике
+      summary: Принять решение по серверным правилам
       parameters:
       - in: path
         name: id
@@ -4411,7 +4793,7 @@ paths:
       description: Только назначенный текущий specialist, статусы review/checking.
         Свободная или чужая заявка — 409. Переход в needs_info сохраняет исполнителя;
         клиент отвечает новой ревизией, проверки и оценка выполняются заново.
-      summary: Запросить уточнение у компании
+      summary: Запросить проверку введённых данных
       parameters:
       - in: path
         name: id
@@ -4839,6 +5221,10 @@ components:
           type: string
           format: uuid
           readOnly: true
+        number:
+          type: string
+          readOnly: true
+          title: Номер заявки
         company:
           type: string
           format: uuid
@@ -4876,10 +5262,6 @@ components:
           format: date-time
           readOnly: true
           title: Изменена
-        number:
-          type: string
-          readOnly: true
-          title: Номер заявки
         revisions:
           type: array
           items:
@@ -4986,6 +5368,10 @@ components:
           type: string
           format: uuid
           readOnly: true
+        number:
+          type: string
+          readOnly: true
+          title: Номер заявки
         company:
           type: string
           format: uuid
@@ -5030,6 +5416,7 @@ components:
       - created_by
       - id
       - lock_version
+      - number
       - product
       - product_name
       - status
@@ -5205,6 +5592,74 @@ components:
       - conversation_id
       - message
       - model_status
+      - version
+    AssistantStep:
+      type: object
+      properties:
+        conversation_id:
+          type: string
+          format: uuid
+        company:
+          type: string
+          format: uuid
+        application:
+          type: string
+          format: uuid
+          nullable: true
+        version:
+          type: integer
+        step_id:
+          type: string
+          format: uuid
+        mode:
+          $ref: '#/components/schemas/ModeEnum'
+        title:
+          type: string
+        prompt:
+          type: string
+        choices:
+          type: array
+          items:
+            $ref: '#/components/schemas/StepChoice'
+        input:
+          allOf:
+          - $ref: '#/components/schemas/StepInput'
+          nullable: true
+        message:
+          allOf:
+          - $ref: '#/components/schemas/Message'
+          nullable: true
+        pending_request_id:
+          type: string
+          format: uuid
+          nullable: true
+        last_request_id:
+          type: string
+          format: uuid
+          nullable: true
+        error_code:
+          type: string
+          nullable: true
+        draft_ready:
+          type: boolean
+        saved_input:
+          type: string
+      required:
+      - application
+      - choices
+      - company
+      - conversation_id
+      - draft_ready
+      - error_code
+      - input
+      - last_request_id
+      - message
+      - mode
+      - pending_request_id
+      - prompt
+      - saved_input
+      - step_id
+      - title
       - version
     AvailableAction:
       type: object
@@ -6695,7 +7150,21 @@ components:
       type: string
       description: |-
         * `user` - Клиент
-        * `assistant` - Савелий
+        * `assistant` - Помощник по кредиту
+    ModeEnum:
+      enum:
+      - choice
+      - input
+      - waiting
+      - result
+      - error
+      type: string
+      description: |-
+        * `choice` - choice
+        * `input` - input
+        * `waiting` - waiting
+        * `result` - result
+        * `error` - error
     ModelStatusEnum:
       enum:
       - available
@@ -6704,6 +7173,21 @@ components:
       description: |-
         * `available` - available
         * `degraded` - degraded
+    NotificationBatch:
+      type: object
+      properties:
+        cursor:
+          type: string
+        has_more:
+          type: boolean
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResultNotification'
+      required:
+      - cursor
+      - has_more
+      - results
     NullEnum:
       enum:
       - null
@@ -7428,6 +7912,42 @@ components:
         * `answer` - answer
         * `missing_information` - missing_information
         * `draft_suggestion` - draft_suggestion
+    ResultNotification:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        application_id:
+          type: string
+          format: uuid
+        number:
+          type: string
+        kind:
+          $ref: '#/components/schemas/ResultNotificationKindEnum'
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - application_id
+      - created_at
+      - id
+      - kind
+      - number
+    ResultNotificationKindEnum:
+      enum:
+      - needs_info
+      - approved
+      - counteroffer
+      - rejected
+      - offered
+      type: string
+      description: |-
+        * `needs_info` - needs_info
+        * `approved` - approved
+        * `counteroffer` - counteroffer
+        * `rejected` - rejected
+        * `offered` - offered
     Revision:
       type: object
       properties:
@@ -7899,6 +8419,10 @@ components:
           type: string
           format: uuid
           readOnly: true
+        number:
+          type: string
+          readOnly: true
+          title: Номер заявки
         company:
           type: string
           format: uuid
@@ -7936,10 +8460,6 @@ components:
           format: date-time
           readOnly: true
           title: Изменена
-        number:
-          type: string
-          readOnly: true
-          title: Номер заявки
         company_inn:
           type: string
           readOnly: true
@@ -8000,6 +8520,72 @@ components:
       - status_changed_at
       - term_months
       - updated_at
+    StepActionRequest:
+      type: object
+      description: Reject extra fields instead of silently dropping status/rate/role
+        injection.
+      properties:
+        expected_version:
+          type: integer
+          minimum: 0
+        step_id:
+          type: string
+          format: uuid
+        request_id:
+          type: string
+          format: uuid
+        action_id:
+          type: string
+          minLength: 1
+          maxLength: 96
+          pattern: ^[a-z0-9:_-]+$
+        text:
+          type: string
+          minLength: 1
+          maxLength: 2000
+      required:
+      - expected_version
+      - request_id
+      - step_id
+    StepChoice:
+      type: object
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+      required:
+      - id
+      - label
+    StepInput:
+      type: object
+      properties:
+        kind:
+          $ref: '#/components/schemas/StepInputKindEnum'
+        label:
+          type: string
+        hint:
+          type: string
+        value:
+          type: string
+        max_length:
+          type: integer
+      required:
+      - hint
+      - kind
+      - label
+      - max_length
+      - value
+    StepInputKindEnum:
+      enum:
+      - money
+      - months
+      - text
+      type: string
+      description: |-
+        * `money` - money
+        * `months` - months
+        * `text` - text
     SystemRoleEnum:
       enum:
       - client

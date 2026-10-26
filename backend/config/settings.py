@@ -156,7 +156,7 @@ SPECTACULAR_SETTINGS = {
         "Swagger передаёт session cookie и X-CSRFToken автоматически. "
         "Изменяющие действия требуют актуальный lock_version из карточки заявки."
     ),
-    "VERSION": "1.3.0",
+    "VERSION": "1.4.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "COMPONENT_SPLIT_REQUEST": True,
     "SWAGGER_UI_DIST": "SIDECAR",

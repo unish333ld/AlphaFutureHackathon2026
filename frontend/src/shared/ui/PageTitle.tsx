@@ -13,7 +13,7 @@ export function PageTitle({
 }) {
   const ref = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
-    document.title = `${title} · Кредитный кабинет`;
+    document.title = `${title}. Кредитный кабинет`;
     ref.current?.focus({ preventScroll: true });
   }, [title]);
   return (

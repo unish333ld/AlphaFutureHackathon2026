@@ -288,8 +288,7 @@ export function Badge({ status }: { status: Status }) {
         : "neutral";
   return (
     <span className={`${s.badge} ${s[tone]}`}>
-      <span aria-hidden="true">●</span>
-      {statuses[status]}
+      <span className={s.badgeText}>{statuses[status]}</span>
     </span>
   );
 }
@@ -300,6 +299,7 @@ export function Pagination({
   next,
   previous,
   onPage,
+  pageSize = 25,
 }: {
   page: number;
   count: number;
@@ -307,12 +307,13 @@ export function Pagination({
   next: string | null;
   previous: string | null;
   onPage: (page: number) => void;
+  pageSize?: number;
 }) {
   if (!count) return null;
   return (
     <nav aria-label="Страницы списка" className={s.pagination}>
       <span>
-        {(page - 1) * 25 + 1}–{(page - 1) * 25 + length} из {count}
+        {(page - 1) * pageSize + 1}–{(page - 1) * pageSize + length} из {count}
       </span>
       <div>
         <Button

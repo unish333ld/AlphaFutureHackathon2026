@@ -3,7 +3,15 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { useScope } from "../app/queries";
 import { api, type QueueFilters, type Status } from "../shared/api/client";
-import { date, elapsed, money, riskLabels, statuses } from "../entities/credit";
+import {
+  displayName,
+  elapsed,
+  money,
+  riskLabels,
+  statuses,
+} from "../entities/credit";
+import { groupQueue } from "../entities/queueGroups";
+import { ApiError } from "../shared/api/errors";
 import {
   Badge,
   Button,
@@ -13,7 +21,6 @@ import {
   Input,
   Loading,
   Pagination,
-  Panel,
 } from "../shared/ui/kit";
 import { PageTitle } from "../shared/ui/PageTitle";
 import s from "../app/layout.module.css";
@@ -22,8 +29,8 @@ import q from "./queue.module.css";
 export default function QueuePage() {
   const scope = useScope("bank");
   const [params, setParams] = useSearchParams();
-  const [search, setSearch] = useState(params.get("search") ?? "");
   const storedSearch = params.get("search") ?? "";
+  const [search, setSearch] = useState(storedSearch);
   useEffect(() => setSearch(storedSearch), [storedSearch]);
   const assignment = ["all", "free", "mine"].includes(
     params.get("assignment") ?? "",
@@ -44,11 +51,11 @@ export default function QueuePage() {
     risk_level: risk || undefined,
     ordering,
     page,
-    search: params.get("search") || undefined,
+    search: storedSearch || undefined,
   };
   function update(key: string, value: string) {
-    setParams((prev) => {
-      const next = new URLSearchParams(prev);
+    setParams((previous) => {
+      const next = new URLSearchParams(previous);
       if (value) next.set(key, value);
       else next.delete(key);
       next.delete("page");
@@ -57,38 +64,49 @@ export default function QueuePage() {
   }
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (search !== (params.get("search") ?? "")) update("search", search);
+      if (search !== storedSearch) update("search", search);
     }, 350);
     return () => clearTimeout(timer);
-  }, [search, params]);
+  }, [search, storedSearch]);
   const result = useQuery({
     queryKey: [...scope, "queue", filters],
     queryFn: ({ signal }) => api.queue(filters, signal),
+    refetchInterval: 10000,
   });
-  function clear() {
-    setSearch("");
-    setParams({});
-  }
+  useEffect(() => {
+    if (
+      page > 1 &&
+      result.error instanceof ApiError &&
+      result.error.status === 404
+    )
+      update("page", "");
+  }, [page, result.error]);
   const filtered = assignment !== "all" || !!status || !!risk || !!search;
+  const groups = groupQueue(
+    result.data?.results ?? [],
+    ordering ?? "-created_at",
+  );
   return (
     <>
       <PageTitle
         title="Очередь заявок"
-        subtitle="Назначения, проверки и решения — в едином кредитном процессе."
+        subtitle="Найдите заявку и возьмите её в работу."
         eyebrow="Кабинет специалиста"
       />
       <div className={s.chips} aria-label="Фильтр по исполнителю">
-        {[
-          ["all", "Все"],
-          ["free", "Свободные"],
-          ["mine", "Мои"],
-        ].map(([key, label]) => (
+        {(
+          [
+            ["all", "Все"],
+            ["free", "Свободные"],
+            ["mine", "Мои"],
+          ] as const
+        ).map(([key, label]) => (
           <Button
             key={key}
             size={40}
             view={assignment === key ? "accent" : "secondary"}
             aria-pressed={assignment === key}
-            onClick={() => update("assignment", key ?? "all")}
+            onClick={() => update("assignment", key)}
           >
             {label}
           </Button>
@@ -96,10 +114,10 @@ export default function QueuePage() {
       </div>
       <p className={s.muted}>
         {assignment === "free"
-          ? "Все без исполнителя, включая завершённые. Выберите статус для рабочей очереди."
+          ? "Заявки без исполнителя. Для работы выберите нужный статус."
           : assignment === "mine"
-            ? "Заявки, назначенные вам. Завершённые заявки остаются в общей очереди и истории."
-            : "Риск и параметры относятся к актуальной ревизии. Время в состоянии — фактическое, без банковского SLA."}
+            ? "Заявки, назначенные вам."
+            : "Все заявки доступных компаний."}
       </p>
       <div className={q.filters}>
         <Input
@@ -115,7 +133,7 @@ export default function QueuePage() {
           value={status ?? ""}
           onChange={(value) => update("status", value)}
           options={[
-            { key: "", content: "Все состояния" },
+            { key: "", content: "Все статусы" },
             ...Object.entries(statuses).map(([key, content]) => ({
               key,
               content,
@@ -143,187 +161,131 @@ export default function QueuePage() {
             { key: "-created_at", content: "Сначала новые" },
             { key: "created_at", content: "Сначала ранние" },
             { key: "-updated_at", content: "Недавно изменённые" },
-            { key: "-amount", content: "По сумме ↓" },
-            { key: "amount", content: "По сумме ↑" },
+            { key: "-amount", content: "Сумма по убыванию" },
+            { key: "amount", content: "Сумма по возрастанию" },
             { key: "number", content: "По номеру" },
-            { key: "-assigned_at", content: "По назначению" },
+            { key: "-assigned_at", content: "По дате назначения" },
             { key: "term_months", content: "По сроку" },
           ]}
         />
-        <Button
-          onClick={() => {
-            void result.refetch();
-          }}
-          disabled={result.isFetching}
-          size={48}
-        >
-          Обновить
-        </Button>
       </div>
-      <Panel>
-        {result.isPending ? (
-          <Loading />
-        ) : result.isError ? (
-          <ErrorNotice
-            error={result.error}
-            retry={() => {
-              void result.refetch();
+      {result.isPending ? (
+        <Loading />
+      ) : result.isError ? (
+        <ErrorNotice error={result.error} retry={() => void result.refetch()} />
+      ) : !result.data.count ? (
+        <Empty
+          title={
+            filtered ? "По выбранным условиям заявок нет" : "Очередь пока пуста"
+          }
+          action={
+            filtered ? (
+              <Button
+                onClick={() => {
+                  setSearch("");
+                  setParams({});
+                }}
+              >
+                Сбросить фильтры
+              </Button>
+            ) : undefined
+          }
+        >
+          {filtered
+            ? "Измените условия поиска."
+            : "Отправленные заявки появятся здесь."}
+        </Empty>
+      ) : (
+        <>
+          <div className={q.groups}>
+            {groups.map((group) => (
+              <section
+                key={group.key}
+                aria-label={group.label || "Заявки в выбранном порядке"}
+              >
+                {group.label ? (
+                  <h2 className={q.dateHeading}>{group.label}</h2>
+                ) : null}
+                <ul className={q.cards}>
+                  {group.rows.map((row, index) => (
+                    <li
+                      key={row.id}
+                      className={
+                        (index + 1) % 4 === 0 && index < group.rows.length - 1
+                          ? q.breath
+                          : undefined
+                      }
+                    >
+                      <Link
+                        to={`/staff/applications/${row.id}`}
+                        className={q.card}
+                        aria-label={`Заявка ${row.number}, ${displayName(row.company_name)}`}
+                      >
+                        <div className={q.identity}>
+                          <strong className={q.number}>{row.number}</strong>
+                          <strong>{displayName(row.company_name)}</strong>
+                          <span className={s.muted}>ИНН {row.company_inn}</span>
+                        </div>
+                        <div>
+                          <span className={q.label}>Сумма и срок</span>
+                          <strong>{money(row.amount)}</strong>
+                          <span>
+                            {row.term_months === null
+                              ? "Срок не указан"
+                              : `${row.term_months} мес.`}
+                          </span>
+                          <span className={s.muted}>
+                            {displayName(row.product_name)}
+                          </span>
+                        </div>
+                        <div>
+                          <span className={q.label}>Оценка риска</span>
+                          <span
+                            className={`${q.risk} ${row.risk_level ? q[row.risk_level] : ""}`}
+                          >
+                            {row.risk_level
+                              ? riskLabels[row.risk_level]
+                              : "Нет оценки"}
+                          </span>
+                        </div>
+                        <div>
+                          <span className={q.label}>Статус</span>
+                          <Badge status={row.status} />
+                        </div>
+                        <div>
+                          <span className={q.label}>Исполнитель</span>
+                          <span>
+                            {row.assigned_to?.first_name ||
+                              row.assigned_to?.username ||
+                              "Не назначен"}
+                          </span>
+                          <span className={s.muted}>
+                            В текущем статусе {elapsed(row.status_changed_at)}
+                          </span>
+                        </div>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))}
+          </div>
+          <Pagination
+            {...result.data}
+            page={page}
+            pageSize={10}
+            length={result.data.results.length}
+            onPage={(next) => {
+              setParams((previous) => {
+                const value = new URLSearchParams(previous);
+                value.set("page", String(next));
+                return value;
+              });
+              window.scrollTo({ top: 0, behavior: "instant" });
             }}
           />
-        ) : !result.data.count ? (
-          <Empty
-            title={
-              filtered
-                ? "По выбранным условиям заявок нет"
-                : "Очередь пока пуста"
-            }
-            action={
-              <Button
-                onClick={
-                  filtered
-                    ? clear
-                    : () => {
-                        void result.refetch();
-                      }
-                }
-              >
-                {filtered ? "Сбросить фильтры" : "Обновить очередь"}
-              </Button>
-            }
-          >
-            {filtered
-              ? "Измените условия поиска или покажите все заявки."
-              : "Отправленные клиентами заявки появятся здесь."}
-          </Empty>
-        ) : (
-          <>
-            <div className={q.tableWrap}>
-              <table className={q.table}>
-                <caption className={q.caption}>Кредитные заявки</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Заявка и компания</th>
-                    <th scope="col">Сумма и продукт</th>
-                    <th scope="col">Риск</th>
-                    <th scope="col">Статус</th>
-                    <th scope="col">Исполнитель</th>
-                    <th scope="col">В состоянии</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {result.data.results.map((row) => (
-                    <tr key={row.id}>
-                      <td>
-                        <Link
-                          to={`/staff/applications/${row.id}`}
-                          className={q.number}
-                        >
-                          {row.number}
-                        </Link>
-                        <strong className={q.company}>
-                          {row.company_name}
-                        </strong>
-                        <span className={q.small}>ИНН {row.company_inn}</span>
-                      </td>
-                      <td>
-                        <strong>{money(row.amount)}</strong>
-                        <span className={q.small}>
-                          {row.term_months === null
-                            ? "Нет срока"
-                            : `${row.term_months} мес.`}
-                        </span>
-                        <span className={q.small}>{row.product_name}</span>
-                      </td>
-                      <td>
-                        <span
-                          className={`${q.risk} ${row.risk_level ? q[row.risk_level] : ""}`}
-                        >
-                          {row.risk_level
-                            ? riskLabels[row.risk_level]
-                            : "Нет оценки"}
-                        </span>
-                      </td>
-                      <td>
-                        <Badge status={row.status} />
-                      </td>
-                      <td>
-                        <span>
-                          {row.assigned_to
-                            ? row.assigned_to.first_name ||
-                              row.assigned_to.username
-                            : "Не назначен"}
-                        </span>
-                        {row.assigned_at ? (
-                          <span className={q.small}>
-                            {date(row.assigned_at)}
-                          </span>
-                        ) : null}
-                      </td>
-                      <td>
-                        <span>{elapsed(row.status_changed_at)}</span>
-                        <span className={q.small}>
-                          {date(row.status_changed_at)}
-                        </span>
-                        <Link
-                          to={`/staff/applications/${row.id}`}
-                          className={s.link}
-                        >
-                          Открыть →
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className={q.mobileRows}>
-              {result.data.results.map((row) => (
-                <Link
-                  className={q.mobileCard}
-                  key={row.id}
-                  to={`/staff/applications/${row.id}`}
-                >
-                  <div className={s.summaryRow}>
-                    <strong className={q.number}>{row.number}</strong>
-                    <Badge status={row.status} />
-                  </div>
-                  <h3>{row.company_name}</h3>
-                  <p className={s.muted}>ИНН {row.company_inn}</p>
-                  <strong>
-                    {money(row.amount)} · {row.term_months ?? "—"} мес.
-                  </strong>
-                  <p className={s.muted}>{row.product_name}</p>
-                  <div className={s.summaryRow}>
-                    <span>
-                      Риск:{" "}
-                      {row.risk_level
-                        ? riskLabels[row.risk_level]
-                        : "Нет оценки"}
-                    </span>
-                    <span>{row.assigned_to?.username ?? "Не назначен"}</span>
-                  </div>
-                  <p className={s.muted}>
-                    В состоянии: {elapsed(row.status_changed_at)}
-                  </p>
-                  <span className={s.link}>Открыть карточку →</span>
-                </Link>
-              ))}
-            </div>
-            <Pagination
-              {...result.data}
-              page={page}
-              length={result.data.results.length}
-              onPage={(next) =>
-                setParams((prev) => {
-                  const value = new URLSearchParams(prev);
-                  value.set("page", String(next));
-                  return value;
-                })
-              }
-            />
-          </>
-        )}
-      </Panel>
+        </>
+      )}
     </>
   );
 }

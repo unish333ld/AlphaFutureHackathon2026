@@ -36,26 +36,30 @@ test("mobile review remains accessible when embedded PDF is unavailable @pdf", a
     await expect(
       dialog.getByRole("button", { name: "Подписать договор", exact: true }),
     ).toBeDisabled();
-    // Fault injection only for the optional frame; the authorized download remains real.
-    await client.page.route("**/pdf/?kind=original", async (route) => {
+    // Only the optional viewing tab fails; the authorized download stays real.
+    await client.context.route("**/pdf/?kind=original", async (route) => {
       if (route.request().isNavigationRequest())
         await route.fulfill({
           status: 503,
-          contentType: "text/plain",
-          body: "Просмотр временно недоступен",
+          contentType: "text/html; charset=utf-8",
+          body: '<!doctype html><html lang="ru"><meta charset="utf-8"><body><main>Просмотр временно недоступен</main></body></html>',
         });
       else await route.continue();
     });
+    await expect(dialog.locator("iframe")).toHaveCount(0);
+    const viewing = client.context.waitForEvent("page");
     await dialog
-      .getByRole("button", { name: "Встроенный просмотр PDF", exact: true })
+      .getByRole("link", { name: "Открыть договор (PDF)", exact: true })
       .click();
+    const viewingPage = await viewing;
     await expect(
-      dialog.getByText(/Если браузер не поддерживает просмотр PDF/),
+      viewingPage.getByText("Просмотр временно недоступен", { exact: true }),
     ).toBeVisible();
+    await viewingPage.close();
     const download = client.page.waitForEvent("download");
     await dialog
       .getByRole("link", {
-        name: "Скачать исходный договор (PDF)",
+        name: "Скачать договор (PDF)",
         exact: true,
       })
       .click();
@@ -87,7 +91,7 @@ test("mobile review remains accessible when embedded PDF is unavailable @pdf", a
     await expect(dialog).toHaveCount(0);
     await expect(
       client.page.getByRole("link", {
-        name: "Скачать исходный договор (PDF)",
+        name: "Скачать договор (PDF)",
         exact: true,
       }),
     ).toBeVisible();
@@ -139,7 +143,7 @@ test("PDF download, cancel before code, reopen, double click, signature and spec
     const downloaded = client.page.waitForEvent("download");
     await dialog
       .getByRole("link", {
-        name: "Скачать исходный договор (PDF)",
+        name: "Скачать договор (PDF)",
         exact: true,
       })
       .click();
@@ -184,7 +188,7 @@ test("PDF download, cancel before code, reopen, double click, signature and spec
     await expect(success).toHaveCount(0);
     await expect(
       client.page.getByText(
-        "Условная подпись сохранена. Ожидается моделируемая выдача специалистом.",
+        "Договор подписан. Ожидается выдача специалистом.",
         { exact: true },
       ),
     ).toBeVisible();
@@ -205,9 +209,7 @@ test("PDF download, cancel before code, reopen, double click, signature and spec
         response.url().endsWith(`/applications/${app.id}/`) &&
         response.request().method() === "GET",
     );
-    await client.page
-      .getByRole("button", { name: "Обновить карточку", exact: true })
-      .click();
+    await client.page.clock.runFor(5100);
     await (await updated).json();
     // TanStack Query batches notifications on a timer; flush the paused clock.
     await client.page.clock.runFor(50);
@@ -224,9 +226,9 @@ test("PDF download, cancel before code, reopen, double click, signature and spec
     await client.page.clock.runFor(500); // Complete Core Modal's exit transition.
     await expect(issued).toHaveCount(0);
     await client.page.clock.resume();
-    await client.page
-      .getByRole("button", { name: "Обновить карточку", exact: true })
-      .click();
+    await client.page.evaluate(() =>
+      window.dispatchEvent(new Event("visibilitychange")),
+    );
     await expect(issued).toHaveCount(0);
     const reread = await client.context.request.get(
       `/api/v1/agreements/${agreement.id}/pdf/`,
@@ -338,7 +340,7 @@ test("navigation before code prevents sign; reload and lost sign response reconc
     ).toBeVisible();
     await expect(
       client.page.getByText(
-        "Условная подпись сохранена. Ожидается моделируемая выдача специалистом.",
+        "Договор подписан. Ожидается выдача специалистом.",
         { exact: true },
       ),
     ).toBeVisible();

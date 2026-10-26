@@ -30,6 +30,7 @@ class Conversation(CreatedModel):
     selected_product = models.ForeignKey(
         "products.CreditProduct", on_delete=models.SET_NULL, null=True, blank=True
     )
+    flow_context = models.JSONField(default=dict, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -65,3 +66,29 @@ class Message(AppendOnlyModel):
         ]
         verbose_name = "Сообщение Савелия"
         verbose_name_plural = "Сообщения Савелия"
+
+
+class Interaction(CreatedModel):
+    """Persist intent before calling a provider so a lost response is reconcilable."""
+
+    conversation = models.ForeignKey(
+        Conversation, on_delete=models.CASCADE, related_name="interactions"
+    )
+    request_id = models.UUIDField()
+    step_id = models.UUIDField()
+    payload = models.JSONField()
+    state = models.CharField(
+        max_length=16,
+        choices=[("pending", "Выполняется"), ("completed", "Завершён"), ("failed", "Ошибка")],
+        default="pending",
+    )
+    error_code = models.CharField(max_length=40, blank=True)
+    finished_at = models.DateTimeField(null=True)
+    message = models.ForeignKey(Message, on_delete=models.SET_NULL, null=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["conversation", "request_id"], name="assistant_request_once"
+            )
+        ]

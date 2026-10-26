@@ -1,6 +1,11 @@
 import { Navigate, useParams } from "react-router-dom";
 import { useApplication } from "../app/queries";
-import { currentRevision, money, nextSteps } from "../entities/credit";
+import {
+  currentRevision,
+  displayName,
+  money,
+  nextSteps,
+} from "../entities/credit";
 import {
   Badge,
   ErrorNotice,
@@ -33,7 +38,7 @@ export default function SubmittedPage() {
   return (
     <div className={s.columns}>
       <Panel>
-        <div className={s.eyebrow}>Сведения получены сервером</div>
+        <div className={s.eyebrow}>Заявка отправлена</div>
         <PageTitle
           title={`Заявка ${app.number} отправлена`}
           subtitle="Текущий статус и все последующие действия доступны в карточке."
@@ -42,11 +47,10 @@ export default function SubmittedPage() {
         <div style={{ margin: "24px 0" }}>
           <Facts
             rows={[
-              { label: "Компания", value: app.company_name },
-              { label: "Продукт", value: app.product_name },
+              { label: "Компания", value: displayName(app.company_name) },
+              { label: "Продукт", value: displayName(app.product_name) },
               { label: "Сумма", value: money(revision.amount) },
               { label: "Срок", value: `${revision.term_months} мес.` },
-              { label: "Ревизия", value: revision.revision_no },
             ]}
           />
         </div>

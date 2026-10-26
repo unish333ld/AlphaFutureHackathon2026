@@ -441,7 +441,9 @@ def test_queue_uses_only_latest_revision_and_keeps_client_list_unchanged(demo, a
     assert app.revisions.get(revision_no=1).assessment.risk_level == "low"
     assert api.get("/api/v1/staff/applications/?risk_level=medium").json()["count"] == 1
     api.force_authenticate(user=demo["client"])
-    client_item = api.get("/api/v1/applications/").json()["results"][0]
+    client_items = api.get("/api/v1/applications/").json()["results"]
+    client_item = next(item for item in client_items if item["id"] == str(app.pk))
+    assert client_item["number"] == app.number
     assert "assigned_to" not in client_item and "amount" not in client_item
 
 
@@ -550,9 +552,12 @@ def test_queue_query_count_does_not_grow_and_pagination_is_stable(demo, api, rev
     with CaptureQueriesContext(connection) as expanded:
         page = api.get("/api/v1/staff/applications/").json()
     assert len(initial) == len(expanded) == 2
-    assert page["count"] == 31 and len(page["results"]) == 25 and page["next"]
-    second = api.get("/api/v1/staff/applications/?page=2").json()
-    assert len(second["results"]) == 6
-    assert not (
-        {item["id"] for item in page["results"]} & {item["id"] for item in second["results"]}
-    )
+    assert page["count"] == 31 and len(page["results"]) == 10 and page["next"]
+    pages = [
+        page,
+        *(api.get(f"/api/v1/staff/applications/?page={number}").json() for number in (2, 3, 4)),
+    ]
+    assert [len(value["results"]) for value in pages] == [10, 10, 10, 1]
+    ids = [item["id"] for value in pages for item in value["results"]]
+    assert len(set(ids)) == len(ids) == 31
+    assert pages[-1]["next"] is None

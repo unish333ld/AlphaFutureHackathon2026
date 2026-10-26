@@ -4,6 +4,15 @@ import { LinkButton } from "../shared/ui/navigation";
 import { Panel } from "../shared/ui/kit";
 import s from "../app/layout.module.css";
 
+const verificationText = {
+  not_checked: "Проверка начнётся после отправки.",
+  pending: "Проверка ещё не завершена.",
+  technical_error: "Проверка прервалась. Её можно повторить.",
+  needs_information: "Для проверки нужны недостающие сведения.",
+  outdated: "После изменений нужна новая проверка.",
+  checked: "Проверки завершены.",
+};
+
 export function ReadinessChecklist({
   app,
   staff,
@@ -34,8 +43,9 @@ export function ReadinessChecklist({
                   ? "✓ Указано"
                   : item.state === "invalid"
                     ? "Некорректно"
-                    : "Нужно уточнить"}{" "}
-                · {item.label}
+                    : "Нужно проверить"}
+                {": "}
+                {item.label}
               </strong>
               {item.state !== "ready" ? (
                 <p className={s.muted}>{item.message}</p>
@@ -44,11 +54,10 @@ export function ReadinessChecklist({
           </li>
         ))}
       </ul>
-      <p className={s.muted}>{value.disclosure}</p>
-      <p className={s.muted}>{value.verification_message}</p>
+      <p className={s.muted}>{verificationText[value.verification_state]}</p>
       {!staff && !value.financial_data_complete && edit !== null ? (
         <LinkButton to={`/app/loans/${app.id}/edit${edit}`}>
-          Уточнить показатели
+          Проверить показатели
         </LinkButton>
       ) : null}
     </Panel>

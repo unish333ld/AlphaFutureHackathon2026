@@ -512,6 +512,7 @@ class ApplicationListSerializer(serializers.ModelSerializer):
         model = Application
         fields = [
             "id",
+            "number",
             "company",
             "company_name",
             "created_by",
@@ -554,7 +555,6 @@ class ApplicationSerializer(ApplicationListSerializer):
 
     class Meta(ApplicationListSerializer.Meta):
         fields = ApplicationListSerializer.Meta.fields + [
-            "number",
             "revisions",
             "current_revision_id",
             "assigned_to",
@@ -582,7 +582,6 @@ class StaffApplicationListSerializer(ApplicationListSerializer):
 
     class Meta(ApplicationListSerializer.Meta):
         fields = ApplicationListSerializer.Meta.fields + [
-            "number",
             "company_inn",
             "current_revision_id",
             "amount",

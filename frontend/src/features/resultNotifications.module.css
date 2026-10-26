@@ -1,0 +1,72 @@
+.toast {
+  position: fixed;
+  left: 24px;
+  bottom: max(24px, env(safe-area-inset-bottom));
+  z-index: 34;
+  width: min(390px, calc(100vw - 48px));
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid #e3e6eb;
+  border-left: 4px solid #ef3124;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 8px 24px #18223024;
+  animation: appear 180ms ease both;
+}
+.toast.leaving {
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity 180ms,
+    transform 180ms;
+}
+.toast strong {
+  display: block;
+  line-height: 1.35;
+}
+.toast p {
+  margin: 5px 0 9px;
+  font-size: 14px;
+}
+.toast a {
+  color: #b82319;
+  font-weight: 600;
+}
+.toast button {
+  background: none;
+  border: 0;
+  color: #5b6470;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.toast :focus-visible {
+  outline: 2px solid #d02a20;
+  outline-offset: 3px;
+}
+@keyframes appear {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (max-width: 600px) {
+  .toast {
+    left: 16px;
+    bottom: max(80px, calc(env(safe-area-inset-bottom) + 64px));
+    width: calc(100vw - 32px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: none;
+    transition: none;
+  }
+}

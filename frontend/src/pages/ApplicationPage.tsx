@@ -6,6 +6,7 @@ import { useApplication, useScope } from "../app/queries";
 import { api, type Application } from "../shared/api/client";
 import {
   actionFor,
+  displayName,
   checkLabels,
   checkStatuses,
   currentAssessment,
@@ -18,7 +19,6 @@ import {
 } from "../entities/credit";
 import {
   Badge,
-  Button,
   ErrorNotice,
   Facts,
   Loading,
@@ -29,7 +29,7 @@ import { PageTitle } from "../shared/ui/PageTitle";
 import { ApplicationActions } from "../features/ApplicationActions";
 import { History } from "../features/History";
 import { Schedule } from "../features/Schedule";
-import { AgreementDocuments } from "../features/AgreementDocuments";
+import { AgreementSummary } from "../features/AgreementSummary";
 import { IssuanceFeedback } from "../features/CompletionFeedback";
 import { CreditCost, OfferComparison } from "../features/CreditDisclosure";
 import { ReadinessChecklist } from "../features/ReadinessChecklist";
@@ -80,7 +80,6 @@ function ApplicationPage({ id }: { id: string }) {
           const result = await query.refetch();
           return result.isSuccess ? result.data : undefined;
         }}
-        refreshing={query.isFetching}
       />
     </>
   );
@@ -88,11 +87,9 @@ function ApplicationPage({ id }: { id: string }) {
 function ApplicationContent({
   app,
   refresh,
-  refreshing,
 }: {
   app: Application;
   refresh: () => Promise<Application | undefined>;
-  refreshing: boolean;
 }) {
   const { user } = useAuth();
   const scope = useScope(app.company);
@@ -126,29 +123,17 @@ function ApplicationContent({
       </div>
       <PageTitle
         title={`Заявка ${app.number}`}
-        subtitle={app.company_name}
-        action={
-          <Button
-            size={40}
-            onClick={() => {
-              void refresh();
-            }}
-            disabled={refreshing}
-          >
-            Обновить карточку
-          </Button>
-        }
+        subtitle={displayName(app.company_name)}
       />
       <div className={s.inline}>
         <Badge status={app.status} />
         <span className={s.muted}>Изменена {date(app.updated_at)}</span>
-        <span className={s.muted}>Версия {app.lock_version}</span>
       </div>
       <IssuanceFeedback app={app} />
       {!revision ? (
-        <Notice tone="error" title="Нет актуальной ревизии">
-          Сервер не вернул данные текущей версии. Обновите карточку; старые
-          данные не используются для решения.
+        <Notice tone="error" title="Данные заявки недоступны">
+          Не удалось показать актуальные сведения. Попробуйте открыть заявку
+          позже.
         </Notice>
       ) : (
         <div className={d.detailGrid}>
@@ -169,9 +154,11 @@ function ApplicationContent({
               <hr className={s.rule} />
               <Facts
                 rows={[
-                  { label: "Продукт", value: app.product_name },
+                  { label: "Продукт", value: displayName(app.product_name) },
                   { label: "Цель", value: revision.purpose },
-                  { label: "Ревизия", value: revision.revision_no },
+                  ...(staff
+                    ? [{ label: "Версия заявки", value: revision.revision_no }]
+                    : []),
                   { label: "Отправлена", value: date(revision.submitted_at) },
                 ]}
               />
@@ -189,7 +176,10 @@ function ApplicationContent({
               ) : (
                 <Facts
                   rows={[
-                    { label: "Название", value: company.data.name },
+                    {
+                      label: "Название",
+                      value: displayName(company.data.name),
+                    },
                     { label: "ИНН", value: company.data.inn },
                     {
                       label: "Регистрация",
@@ -207,9 +197,7 @@ function ApplicationContent({
                     },
                     {
                       label: "Клиент банка",
-                      value: company.data.is_existing_client
-                        ? "Да · синтетический профиль"
-                        : "Нет",
+                      value: company.data.is_existing_client ? "Да" : "Нет",
                     },
                   ]}
                 />
@@ -231,7 +219,7 @@ function ApplicationContent({
           </div>
           <div className={s.stack}>
             {revision.information_requests.length ? (
-              <Panel title="Запросы уточнения">
+              <Panel title="Проверка введённых данных">
                 {revision.information_requests.map((item) => (
                   <div key={item.id} className={s.subtle}>
                     <p>{item.question}</p>
@@ -244,7 +232,7 @@ function ApplicationContent({
                 ))}
               </Panel>
             ) : null}
-            <Panel title="Проверки · моделируются">
+            <Panel title="Проверки">
               {!checks.length ? (
                 <p className={s.muted}>
                   Проверки выполняются после отправки заявки.
@@ -262,9 +250,7 @@ function ApplicationContent({
                       <div>
                         <strong>{checkLabels[check.kind]}</strong>
                         <p>{checkStatuses[check.status]}</p>
-                        <small>
-                          Попытка {check.attempt} · {date(check.checked_at)}
-                        </small>
+                        <small>{date(check.checked_at)}</small>
                         {"missing_fields" in check.result &&
                         check.result.missing_fields.length ? (
                           <p className={s.muted}>
@@ -276,12 +262,6 @@ function ApplicationContent({
                   ))}
                 </ul>
               )}
-              {attempt > 1 ? (
-                <p className={s.muted}>
-                  Показана актуальная попытка {attempt}. Предыдущие результаты
-                  сохранены в истории ревизии.
-                </p>
-              ) : null}
               {checks.some((check) => check.status === "error") ? (
                 <Notice tone="warning">
                   Техническая ошибка проверки не является кредитным отказом.
@@ -293,8 +273,8 @@ function ApplicationContent({
               {!assessment ? (
                 <p className={s.muted}>
                   {revision.assessment
-                    ? "Оценка относится к другой ревизии и не используется."
-                    : "У текущей ревизии пока нет оценки."}
+                    ? "Данные изменились. Ожидается новая оценка."
+                    : "Оценка пока не готова."}
                 </p>
               ) : (
                 <>
@@ -302,9 +282,6 @@ function ApplicationContent({
                     <strong className={`${d.risk} ${d[assessment.risk_level]}`}>
                       {riskLabels[assessment.risk_level]} риск
                     </strong>
-                    <span className={s.muted}>
-                      Демо-скор {assessment.score} / 100
-                    </span>
                   </div>
                   <hr className={s.rule} />
                   <Facts
@@ -314,7 +291,7 @@ function ApplicationContent({
                         value: money(assessment.factors.monthly_cashflow),
                       },
                       {
-                        label: "Лимит платежа демо",
+                        label: "Доступный платёж",
                         value: money(assessment.factors.payment_capacity),
                       },
                       {
@@ -334,11 +311,6 @@ function ApplicationContent({
                       },
                     ]}
                   />
-                  <p className={s.muted}>
-                    Правила {assessment.rules_version}, попытка{" "}
-                    {assessment.checks_attempt}. Это демонстрационная оценка, не
-                    подтверждение кредитоспособности реального бизнеса.
-                  </p>
                 </>
               )}
             </Panel>
@@ -357,10 +329,6 @@ function ApplicationContent({
                 >
                   {decision.explanation}
                 </Notice>
-                <p className={s.muted}>
-                  Код причины: {decision.reason_code} ·{" "}
-                  {decision.policy_version}
-                </p>
                 {offer ? (
                   <>
                     <div className={s.bigAmount}>{money(offer.amount)}</div>
@@ -394,69 +362,6 @@ function ApplicationContent({
                 ) : null}
               </Panel>
             ) : null}
-            {agreement ? (
-              <Panel title="Демонстрационный договор">
-                <h3 className={d.contractNumber}>{agreement.number}</h3>
-                <AgreementDocuments
-                  app={app}
-                  agreement={agreement}
-                  reload={refresh}
-                />
-                <CreditCost value={agreement.cost_breakdown} />
-                <Facts
-                  rows={[
-                    {
-                      label: "Сумма договора",
-                      value: money(agreement.terms_snapshot.amount),
-                    },
-                    {
-                      label: "Условная подпись",
-                      value: agreement.signed_at
-                        ? date(agreement.signed_at)
-                        : "Ещё не сохранена",
-                    },
-                  ]}
-                />
-                <p className={s.muted}>
-                  Условия зафиксированы при принятии предложения. Юридически
-                  значимая подпись и денежные переводы не выполняются.
-                </p>
-                {agreement.disbursement ? (
-                  <Notice tone="success" title="Выдача смоделирована">
-                    <strong>{money(agreement.disbursement.amount)}</strong>
-                    <p>{date(agreement.disbursement.issued_at)}</p>
-                    <small>Идентификатор: {agreement.disbursement.id}</small>
-                  </Notice>
-                ) : app.status === "signed" ? (
-                  <Notice>
-                    Условная подпись сохранена. Ожидается моделируемая выдача
-                    специалистом.
-                  </Notice>
-                ) : null}
-                <details>
-                  <summary className={s.link}>
-                    Условия принятого договора
-                  </summary>
-                  <Facts
-                    rows={[
-                      {
-                        label: "Ставка",
-                        value: rate(agreement.terms_snapshot.annual_rate),
-                      },
-                      {
-                        label: "Срок",
-                        value: `${agreement.terms_snapshot.term_months} мес.`,
-                      },
-                      {
-                        label: "Платёж",
-                        value: money(agreement.terms_snapshot.monthly_payment),
-                      },
-                    ]}
-                  />
-                  <Schedule schedule={agreement.terms_snapshot.schedule} />
-                </details>
-              </Panel>
-            ) : null}
           </div>
           <aside className={s.stack}>
             {staff ? (
@@ -482,10 +387,17 @@ function ApplicationContent({
               </Panel>
             ) : null}
             <ApplicationActions app={app} reload={refresh} />
+            {agreement ? (
+              <AgreementSummary
+                app={app}
+                agreement={agreement}
+                reload={refresh}
+              />
+            ) : null}
           </aside>
         </div>
       )}
-      {app.revisions.length > 1 ? (
+      {staff && app.revisions.length > 1 ? (
         <Panel title="Предыдущие ревизии">
           <details>
             <summary className={s.link}>
@@ -495,9 +407,9 @@ function ApplicationContent({
               .filter((item) => item.id !== app.current_revision_id)
               .map((item) => (
                 <div className={d.oldRevision} key={item.id}>
-                  <h3>Ревизия {item.revision_no}</h3>
+                  <h3>Версия {item.revision_no}</h3>
                   <p>
-                    {money(item.amount)} · {item.term_months} мес. ·{" "}
+                    {money(item.amount)}, {item.term_months} мес.,{" "}
                     {item.purpose}
                   </p>
                   <p className={s.muted}>
@@ -507,8 +419,7 @@ function ApplicationContent({
                   <ul>
                     {item.checks.map((check) => (
                       <li key={check.id}>
-                        {checkLabels[check.kind]} ·{" "}
-                        {checkStatuses[check.status]} · попытка {check.attempt}
+                        {checkLabels[check.kind]}: {checkStatuses[check.status]}
                       </li>
                     ))}
                   </ul>
@@ -517,7 +428,7 @@ function ApplicationContent({
           </details>
         </Panel>
       ) : null}
-      <History id={app.id} />
+      <History id={app.id} version={app.lock_version} />
     </div>
   );
 }

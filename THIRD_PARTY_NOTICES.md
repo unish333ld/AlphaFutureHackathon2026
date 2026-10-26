@@ -45,7 +45,7 @@ Pango — LGPL-2.1-or-later; HarfBuzz — MIT-style; DejaVu Serif — лицен
 | Компонент | Лицензия по метаданным пакета |
 |---|---|
 | React, React DOM, React Router, TanStack Query | MIT |
-| Alfa Core Components, config, stack-context, icons-logotype | MIT |
+| Alfa Core Components, config, stack-context, icons-logotype, icons-glyph | MIT |
 | React Hook Form, resolvers, Zod | MIT |
 | Vite, Vitest, Prettier, openapi-typescript | MIT |
 | TypeScript, Playwright | Apache-2.0 |

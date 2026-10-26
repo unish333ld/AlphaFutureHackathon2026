@@ -63,7 +63,7 @@ test("jury: signed copy failure is recoverable without another signature @jury",
     await expect(success).toBeVisible();
     await success.getByRole("button", { name: "Закрыть", exact: true }).click();
     const retry = client.page.getByRole("button", {
-      name: "Сформировать копию с демо-отметкой",
+      name: "Повторить создание копии",
       exact: true,
     });
     await expect(retry).toBeVisible();
@@ -91,7 +91,7 @@ test("jury: signed copy failure is recoverable without another signature @jury",
     });
     await expect(
       client.page.getByRole("link", {
-        name: "Скачать копию с демо-отметкой (PDF)",
+        name: "Скачать подписанную копию (PDF)",
         exact: true,
       }),
     ).toBeVisible();
@@ -172,12 +172,9 @@ test("jury: confirmed signature stays acknowledged if subsequent card reads fail
       client.page.getByText(/Сервер подтвердил подпись/),
     ).toBeVisible();
     blockReads = false;
-    await client.page
-      .getByRole("button", { name: "Обновить карточку", exact: true })
-      .click();
     await expect(
       client.page.getByText(
-        "Условная подпись сохранена. Ожидается моделируемая выдача специалистом.",
+        "Договор подписан. Ожидается выдача специалистом.",
         { exact: true },
       ),
     ).toBeVisible();
@@ -249,7 +246,7 @@ for (const outcome of ["approved", "counteroffer"] as const) {
       const downloaded = client.page.waitForEvent("download");
       await review
         .getByRole("link", {
-          name: "Скачать исходный договор (PDF)",
+          name: "Скачать договор (PDF)",
           exact: true,
         })
         .click();
@@ -314,7 +311,7 @@ for (const outcome of ["approved", "counteroffer"] as const) {
       expect(currentOffer(app)!.agreement!.disbursement).toBeNull();
       await expect(
         client.page.getByText(
-          "Условная подпись сохранена. Ожидается моделируемая выдача специалистом.",
+          "Договор подписан. Ожидается выдача специалистом.",
           { exact: true },
         ),
       ).toBeVisible();
@@ -325,12 +322,9 @@ for (const outcome of ["approved", "counteroffer"] as const) {
           )!.agreement!.documents.some((value) => value.kind === "signed_copy"),
         )
         .toBe(true);
-      await client.page
-        .getByRole("button", { name: "Обновить карточку", exact: true })
-        .click();
       await expect(
         client.page.getByRole("link", {
-          name: "Скачать копию с демо-отметкой (PDF)",
+          name: "Скачать подписанную копию (PDF)",
           exact: true,
         }),
       ).toBeVisible();
@@ -385,9 +379,6 @@ for (const outcome of ["approved", "counteroffer"] as const) {
           { exact: true },
         ),
       ).toHaveCount(0);
-      await client.page
-        .getByRole("button", { name: "Обновить карточку", exact: true })
-        .click();
       const issued = client.page.getByRole("dialog", {
         name: "Демо-выдача завершена",
         exact: true,
@@ -407,10 +398,16 @@ for (const outcome of ["approved", "counteroffer"] as const) {
       expect(currentOffer(final)!.agreement!.disbursement!.amount).toBe(
         offered.amount,
       );
-      const events = await client.context.request.get(
-        `/api/v1/applications/${app.id}/events/`,
-      );
-      const history = (await events.json()).results as { event_type: string }[];
+      const history: { event_type: string }[] = [];
+      for (let page = 1; ; page++) {
+        const events = await client.context.request.get(
+          `/api/v1/applications/${app.id}/events/?page=${page}`,
+        );
+        expect(events.ok()).toBe(true);
+        const batch = await events.json();
+        history.push(...batch.results);
+        if (!batch.next) break;
+      }
       expect(
         history.filter((event) => event.event_type === "signed"),
       ).toHaveLength(1);
@@ -424,11 +421,14 @@ for (const outcome of ["approved", "counteroffer"] as const) {
       await client.page.reload();
       await expect(client.page.getByRole("dialog")).toHaveCount(0);
       await expect(
-        client.page.getByText("Выдача смоделирована", { exact: true }),
+        client.page.getByText("Выдача завершена", { exact: true }).first(),
       ).toBeVisible();
       await expect(
-        client.page.getByRole("button", { name: "Савелий", exact: true }),
-      ).toHaveCount(0);
+        client.page.getByRole("button", {
+          name: "Помощник по кредиту",
+          exact: true,
+        }),
+      ).toHaveCount(process.env.E2E_ASSISTANT_ENABLED === "false" ? 0 : 1);
       expect(signs).toBe(1);
       expect(issues).toBe(1);
       expect(errors).toEqual([]);

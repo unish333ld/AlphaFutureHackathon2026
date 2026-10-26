@@ -103,6 +103,17 @@ describe("DRF errors", () => {
     expect(new ApiError(503, null).uncertain).toBe(true);
     expect(new ApiError(409, null).uncertain).toBe(false);
   });
+  it("does not show the server's English throttle detail", () => {
+    expect(
+      normalizeError(
+        {
+          detail: "Запрос был проигнорирован. Expected available in 2 seconds.",
+          code: "throttled",
+        },
+        429,
+      ).message,
+    ).toBe("Слишком много запросов. Подождите немного и попробуйте снова.");
+  });
 });
 describe("issuance intent survives an uncertain response", () => {
   beforeEach(() => {

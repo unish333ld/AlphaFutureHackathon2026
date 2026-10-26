@@ -13,7 +13,10 @@
   --color-light-accent-primary-press: #a9231a;
   --color-light-text-secondary: #4c5562;
   --color-light-text-tertiary: #4c5562;
-  font-family: Arial, Helvetica, system-ui, sans-serif;
+  --font-family: var(--font-family-system);
+  font-family: var(--font-family-system);
+  font-size: 16px;
+  line-height: 1.5;
   color: #202329;
   background: #f3f4f6;
   font-synthesis: none;
@@ -73,11 +76,11 @@ h1[tabindex="-1"]:focus {
   outline: none;
 }
 h2 {
-  font-size: 21px;
+  font-size: 20px;
   line-height: 1.3;
 }
 h3 {
-  font-size: 17px;
+  font-size: 16px;
   line-height: 1.4;
 }
 p {

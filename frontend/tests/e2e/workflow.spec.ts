@@ -69,10 +69,10 @@ test("real UI: create → claim → clarification revision → server decision �
       staff.page.getByRole("button", { name: "Освободить заявку" }),
     ).toBeVisible();
     await staff.page
-      .getByRole("button", { name: "Запросить уточнение", exact: true })
+      .getByRole("button", { name: "Запросить проверку данных", exact: true })
       .click();
     await staff.page
-      .getByLabel("Какие сведения нужны?", { exact: true })
+      .getByLabel("Какие данные нужно проверить?", { exact: true })
       .fill("Подтвердите месячную выручку и платежи.");
     await staff.page
       .getByRole("dialog")
@@ -81,9 +81,15 @@ test("real UI: create → claim → clarification revision → server decision �
     await expect(staff.page.getByRole("dialog")).toHaveCount(0);
     app = await getApp(client.context, id);
     expect(app.status).toBe("needs_info");
-    await showApp(client.page, app);
+    await client.page.goto("/app");
+    const checkRequestLink = client.page.getByRole("link", {
+      name: `Открыть заявку ${app.number}`,
+      exact: true,
+    });
+    await expect(checkRequestLink).toBeVisible();
+    await checkRequestLink.click();
     await client.page
-      .getByRole("link", { name: "Ответить банку", exact: true })
+      .getByRole("link", { name: "Проверьте данные заявки", exact: true })
       .click();
     await expect(
       client.page.getByText("Подтвердите месячную выручку и платежи.", {
@@ -100,7 +106,10 @@ test("real UI: create → claim → clarification revision → server decision �
       .getByLabel("Подтверждаю, что проверил(а) параметры и сведения")
       .press("Space");
     await client.page
-      .getByRole("button", { name: "Отправить уточнение", exact: true })
+      .getByRole("button", {
+        name: "Отправить проверенные данные",
+        exact: true,
+      })
       .click();
     await expect(
       client.page.getByRole("heading", {
@@ -110,6 +119,28 @@ test("real UI: create → claim → clarification revision → server decision �
     ).toBeVisible();
     app = await getApp(client.context, id);
     expect(currentRevision(app)?.revision_no).toBe(2);
+    expect(app.status).toBe("review");
+    await client.page.route("**/api/v1/applications/**", async (route) => {
+      const url = new URL(route.request().url());
+      if (
+        route.request().method() === "GET" &&
+        url.pathname === "/api/v1/applications/"
+      )
+        await route.fulfill({
+          status: 503,
+          contentType: "application/json",
+          body: JSON.stringify({ detail: "Unavailable" }),
+        });
+      else await route.continue();
+    });
+    await client.page.goto("/app");
+    await expect(
+      client.page.getByRole("link", {
+        name: `Открыть заявку ${app.number}`,
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    await client.page.unrouteAll();
     await showApp(staff.page, app, true);
     await uiAction(
       staff.page,
@@ -139,12 +170,12 @@ test("real UI: create → claim → clarification revision → server decision �
     await expect(
       staff.page
         .getByRole("status")
-        .filter({ hasText: "Выдача смоделирована" })
+        .filter({ hasText: "Выдача завершена" })
         .first(),
     ).toBeVisible();
     await staff.page.reload();
     await expect(
-      staff.page.getByText("Выдача смоделирована", { exact: true }).first(),
+      staff.page.getByText("Выдача завершена", { exact: true }).first(),
     ).toBeVisible();
     app = await getApp(client.context, id);
     expect(app.status).toBe("issued");
@@ -205,7 +236,10 @@ test("server counteroffer, rejection, missing information and technical HTTP-200
     expect(missing.status).toBe("needs_info");
     await showApp(client.page, missing);
     await expect(
-      client.page.getByRole("link", { name: "Ответить банку", exact: true }),
+      client.page.getByRole("link", {
+        name: "Проверьте данные заявки",
+        exact: true,
+      }),
     ).toBeVisible();
     const technical = await create(client.context, { company: 5 });
     expect(technical.status).toBe("checking");
@@ -292,7 +326,7 @@ test("assignment race, forbidden reassignment, queue filters, risk and search", 
       `/staff?assignment=mine&status=review&risk_level=low&search=${app.number}`,
     );
     await expect(
-      winner.page.getByRole("link", { name: app.number, exact: true }).first(),
+      winner.page.getByRole("link", { name: new RegExp(app.number) }).first(),
     ).toBeVisible();
     await winner.page
       .getByRole("button", { name: "Свободные", exact: true })
@@ -514,33 +548,45 @@ test("responsive layouts, keyboard dialogs, accessibility, empty states and AI a
     await client.page.goto("/app");
     if (process.env.E2E_ASSISTANT_ENABLED === "false") {
       await expect(
-        client.page.getByRole("button", { name: "Савелий", exact: true }),
+        client.page.getByRole("button", {
+          name: "Помощник по кредиту",
+          exact: true,
+        }),
       ).toHaveCount(0);
       await expect(
         client.page.getByRole("dialog", {
-          name: "Савелий, помощник по кредиту",
+          name: "Помощник по кредиту",
         }),
       ).toHaveCount(0);
     } else {
       await expect(
-        client.page.getByRole("button", { name: "Савелий", exact: true }),
+        client.page.getByRole("button", {
+          name: "Помощник по кредиту",
+          exact: true,
+        }),
       ).toBeVisible();
       await client.page
-        .getByRole("button", { name: "Савелий", exact: true })
+        .getByRole("button", { name: "Помощник по кредиту", exact: true })
         .click();
       await expect(
         client.page.getByRole("dialog", {
-          name: "Савелий, помощник по кредиту",
+          name: "Помощник по кредиту",
         }),
       ).toBeVisible();
       await client.page.keyboard.press("Escape");
       await expect(client.page.getByRole("dialog")).toHaveCount(0);
       await expect(
-        client.page.getByRole("button", { name: "Савелий", exact: true }),
+        client.page.getByRole("button", {
+          name: "Помощник по кредиту",
+          exact: true,
+        }),
       ).toBeFocused();
     }
     await expect(
-      staff.page.getByRole("button", { name: "Савелий", exact: true }),
+      staff.page.getByRole("button", {
+        name: "Помощник по кредиту",
+        exact: true,
+      }),
     ).toHaveCount(0);
     await outsider.page.goto("/app/loans");
     await expect(
@@ -607,7 +653,9 @@ test("login CSRF rotation, protected writes, logout and cache isolation", async 
       data: {},
     });
     expect(noCsrf.status()).toBe(403);
-    await page.getByRole("button", { name: "Выйти", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Выйти из кабинета", exact: true })
+      .click();
     await page
       .getByRole("dialog")
       .getByRole("button", { name: "Завершить сессию", exact: true })

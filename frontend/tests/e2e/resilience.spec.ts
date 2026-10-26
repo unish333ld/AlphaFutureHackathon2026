@@ -98,9 +98,6 @@ test("failed fresh read cannot authorize a decision from cached application data
     expect(decisions).toBe(0);
     failReads = false;
     await staff.page
-      .getByRole("button", { name: "Обновить карточку", exact: true })
-      .click();
-    await staff.page
       .getByRole("button", { name: "Принять решение по правилам", exact: true })
       .click();
     await expect(staff.page.getByRole("dialog")).toBeVisible();
@@ -125,7 +122,7 @@ test("background card failure does not erase the specialist clarification questi
     });
     await showApp(staff.page, app, true);
     await staff.page
-      .getByRole("button", { name: "Запросить уточнение", exact: true })
+      .getByRole("button", { name: "Запросить проверку данных", exact: true })
       .click();
     const question = staff.page.getByRole("dialog").getByRole("textbox");
     await question.fill("Уточните назначение финансирования");

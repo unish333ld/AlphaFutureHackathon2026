@@ -1,0 +1,12 @@
+.contents {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.contents p {
+  margin: 0;
+}
+.number {
+  color: #5b6470;
+  font-size: 14px;
+}

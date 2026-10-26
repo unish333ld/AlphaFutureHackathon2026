@@ -3,14 +3,14 @@ import { Link } from "react-router-dom";
 import { useScope } from "../app/queries";
 import { api, type Schema } from "../shared/api/client";
 import { Badge } from "../shared/ui/kit";
-import { date, currentRevision, money } from "../entities/credit";
+import { date, displayName, currentRevision, money } from "../entities/credit";
 import s from "../app/layout.module.css";
 
 export function LoanRows({ rows }: { rows: Schema["ApplicationList"][] }) {
   const scope = useScope();
   const details = useQueries({
     queries: rows.map((row) => ({
-      queryKey: [...scope, "application", row.id],
+      queryKey: [...scope, "application", row.id, row.lock_version],
       queryFn: ({ signal }: { signal: AbortSignal }) =>
         api.application(row.id, false, signal),
       staleTime: 15000,
@@ -37,7 +37,7 @@ export function LoanRows({ rows }: { rows: Schema["ApplicationList"][] }) {
           : undefined;
         const actionLabel =
           action?.action === "provide_information"
-            ? "Ответить банку"
+            ? "Проверить данные"
             : action?.action === "update_draft"
               ? "Продолжить"
               : action?.action === "sign_agreement"
@@ -54,14 +54,14 @@ export function LoanRows({ rows }: { rows: Schema["ApplicationList"][] }) {
             key={row.id}
             to={href}
             className={s.rowLink}
-            aria-label={`${detail?.number ?? row.product_name} · ${row.company_name} · ${actionLabel}`}
+            aria-label={`Заявка ${detail?.number ?? displayName(row.product_name)}, ${displayName(row.company_name)}. ${actionLabel}`}
           >
             <div>
-              <strong>{detail?.number ?? row.product_name}</strong>
-              <p>{row.company_name}</p>
+              <strong>{detail?.number ?? displayName(row.product_name)}</strong>
+              <p>{displayName(row.company_name)}</p>
               <span className={s.muted}>
                 {revision
-                  ? `${money(revision.amount)} · ${revision.term_months} мес. · ${row.product_name}`
+                  ? `${money(revision.amount)}, ${revision.term_months} мес., ${displayName(row.product_name)}`
                   : details[index]?.isError
                     ? "Параметры недоступны — откройте карточку"
                     : "Загружаем параметры…"}

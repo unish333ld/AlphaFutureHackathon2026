@@ -11,7 +11,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Доступные демо-договоры */
+    /** Доступные договоры */
     get: operations["v1_agreements_list"];
     put?: never;
     post?: never;
@@ -240,7 +240,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Ответить на уточнение новой ревизией */
+    /** Отправить проверенные данные заявки */
     post: operations["v1_applications_provide_information_create"];
     delete?: never;
     options?: never;
@@ -305,6 +305,23 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/v1/applications/notifications/": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Новые результаты рассмотрения */
+    get: operations["v1_applications_notifications_retrieve"];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/v1/assistant/conversations/": {
     parameters: {
       query?: never;
@@ -312,7 +329,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Мои диалоги */
+    /** Сохранённые диалоги */
     get: operations["v1_assistant_conversations_list"];
     put?: never;
     /** Начать диалог для своей компании */
@@ -334,7 +351,7 @@ export interface paths {
     get: operations["v1_assistant_conversations_messages_retrieve"];
     put?: never;
     /**
-     * Спросить Савелия
+     * Задать вопрос помощнику
      * @description Требует session cookie, CSRF и актуальную версию диалога. Помощник не меняет заявку и не принимает кредитное решение. reply_type определяет ответ/уточнение/предложение полей; facts — только серверные источники текущего ответа. model_status=degraded означает, что после чтения фактов модель не завершила объяснение. В таком случае показаны только факты. 409 требует сверки истории и карточки без автоматического повтора; 429 — соблюдения Retry-After. application_version фиксирует версию заявки на момент ответа. Перед переносом suggested_draft проверить неизменность формы и показать подтверждение. История ограничена AI_HISTORY_DAYS.
      */
     post: operations["v1_assistant_conversations_messages_create"];
@@ -351,12 +368,56 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Мой диалог */
+    /** Сохранённый диалог */
     get: operations["v1_assistant_conversations_retrieve"];
     put?: never;
     post?: never;
-    /** Удалить мой диалог и все сообщения */
+    /** Удалить диалог и его сообщения */
     delete: operations["v1_assistant_conversations_destroy"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/assistant/conversations/{id}/step/": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Получить актуальный шаг
+     * @description Сверяйте состояние после сетевой ошибки. waiting означает, что запрос ещё выполняется. Повторная отправка автоматически не нужна.
+     */
+    get: operations["v1_assistant_conversations_step_retrieve"];
+    put?: never;
+    /**
+     * Ответить на текущий шаг
+     * @description Передайте step_id, expected_version и уникальный request_id. На choice допустим только актуальный action_id, на input только text. Старый шаг или чужой вариант возвращает 409 до выполнения инструмента. Повтор request_id не выполняет операцию снова. HTTP 200 с mode=error сообщает о сохранённом сбое, а не об успешном ответе.
+     */
+    post: operations["v1_assistant_conversations_step_create"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/v1/assistant/conversations/current/": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Продолжить текущий сценарий
+     * @description Возвращает текущий шаг пользователя в выбранной компании и заявке. История не удаляется. Повторное открытие восстанавливает тот же сценарий.
+     */
+    post: operations["v1_assistant_conversations_current_create"];
+    delete?: never;
     options?: never;
     head?: never;
     patch?: never;
@@ -373,7 +434,7 @@ export interface paths {
     put?: never;
     /**
      * Предварительный аннуитетный расчёт
-     * @description Учебный аннуитет и подробная стоимость: равные месячные периоды, комиссии/услуги исключены политикой демо. Передайте product: ставка и границы берутся с сервера. Альтернатива — annual_rate для самостоятельного расчёта, не банковского предложения. Последний платёж корректирует округление; юридическая ПСК не рассчитывается.
+     * @description Предварительный расчёт по равным месячным периодам. При выборе product ставка и границы берутся из каталога. Поле annual_rate подходит только для самостоятельного расчёта. Последний платёж учитывает округление. Комиссии и услуги не включены; юридическая ПСК не рассчитывается.
      */
     post: operations["v1_calculator_payment_create"];
     delete?: never;
@@ -527,7 +588,7 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Принять предложение и сформировать демо-договор */
+    /** Принять предложение и сформировать договор */
     post: operations["v1_offers_accept_create"];
     delete?: never;
     options?: never;
@@ -559,7 +620,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Демонстрационный каталог */
+    /** Каталог кредитных продуктов */
     get: operations["v1_products_list"];
     put?: never;
     post?: never;
@@ -576,7 +637,7 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Условия демо-продукта */
+    /** Условия кредитного продукта */
     get: operations["v1_products_retrieve"];
     put?: never;
     post?: never;
@@ -649,7 +710,7 @@ export interface paths {
     };
     /**
      * Очередь специалиста
-     * @description Пагинация по 25 строк, стабильная сортировка с UUID как вторичным ключом; NULL в конце. assignment=free — свободные, mine — назначенные текущему специалисту, all — все. risk_level=unassessed — оценка отсутствует. search — подстрока номера/названия компании/ИНН. amount, term_months и risk_level относятся строго к максимальному revision_no. История ревизий в строки не включается. status_changed_at — фактическое начало текущего кредитного статуса, не SLA банка.
+     * @description До 10 заявок на странице. Сортировка стабильна: при равных значениях используется ID. assignment=free — свободные, mine — ваши, all — все. risk_level=unassessed — без оценки. search ищет по номеру, компании и ИНН. Сумма, срок и риск относятся к актуальной версии заявки. status_changed_at показывает время с начала текущего статуса, это не SLA.
      */
     get: operations["v1_staff_applications_list"];
     put?: never;
@@ -707,7 +768,7 @@ export interface paths {
     get?: never;
     put?: never;
     /**
-     * Принять решение по демонстрационной политике
+     * Принять решение по серверным правилам
      * @description Только назначенный текущий specialist, статус review и актуальный lock_version. Сотрудник запускает серверную политику; тело не принимает исход, ставку или сумму. Используется assessment текущей (максимальный revision_no) отправленной ревизии и её checks_attempt: полный набор registry/credit_history/financial без missing/error, оценка создана после этих проверок. Новая попытка делает старую оценку непригодной. Результат approved/counteroffer/rejected, reason_code, explanation, policy_version и offer находятся в revisions[0].assessment.decision; ссылки assessment/revision и checks_attempt явные. Повтор после решения — 409, нового решения/предложения не создаёт. Конфликт назначения, версии, состояния или устаревшей оценки — 409: обновите карточку и предложите пользователю проверить данные. Положительный результат сохраняет исполнителя при ожидании клиента; отказ освобождает назначение.
      */
     post: operations["v1_staff_applications_decide_create"];
@@ -747,7 +808,7 @@ export interface paths {
     get?: never;
     put?: never;
     /**
-     * Запросить уточнение у компании
+     * Запросить проверку введённых данных
      * @description Только назначенный текущий specialist, статусы review/checking. Свободная или чужая заявка — 409. Переход в needs_info сохраняет исполнителя; клиент отвечает новой ревизией, проверки и оценка выполняются заново.
      */
     post: operations["v1_staff_applications_request_information_create"];
@@ -907,6 +968,8 @@ export interface components {
     Application: {
       /** Format: uuid */
       readonly id: string;
+      /** Номер заявки */
+      readonly number: string;
       /** Format: uuid */
       readonly company: string;
       readonly company_name: string;
@@ -929,8 +992,6 @@ export interface components {
        * Format: date-time
        */
       readonly updated_at: string;
-      /** Номер заявки */
-      readonly number: string;
       readonly revisions: components["schemas"]["Revision"][];
       /** Format: uuid */
       readonly current_revision_id: string | null;
@@ -971,6 +1032,8 @@ export interface components {
     ApplicationList: {
       /** Format: uuid */
       readonly id: string;
+      /** Номер заявки */
+      readonly number: string;
       /** Format: uuid */
       readonly company: string;
       readonly company_name: string;
@@ -1074,6 +1137,30 @@ export interface components {
       version: number;
       model_status: components["schemas"]["ModelStatusEnum"];
       message: components["schemas"]["Message"];
+    };
+    AssistantStep: {
+      /** Format: uuid */
+      conversation_id: string;
+      /** Format: uuid */
+      company: string;
+      /** Format: uuid */
+      application: string | null;
+      version: number;
+      /** Format: uuid */
+      step_id: string;
+      mode: components["schemas"]["ModeEnum"];
+      title: string;
+      prompt: string;
+      choices: components["schemas"]["StepChoice"][];
+      input: components["schemas"]["StepInput"] | null;
+      message: components["schemas"]["Message"] | null;
+      /** Format: uuid */
+      pending_request_id: string | null;
+      /** Format: uuid */
+      last_request_id: string | null;
+      error_code: string | null;
+      draft_ready: boolean;
+      saved_input: string;
     };
     AvailableAction: {
       action: components["schemas"]["ActionEnum"];
@@ -1738,16 +1825,30 @@ export interface components {
     };
     /**
      * @description * `user` - Клиент
-     *     * `assistant` - Савелий
+     *     * `assistant` - Помощник по кредиту
      * @enum {string}
      */
     MessageRoleEnum: "user" | "assistant";
+    /**
+     * @description * `choice` - choice
+     *     * `input` - input
+     *     * `waiting` - waiting
+     *     * `result` - result
+     *     * `error` - error
+     * @enum {string}
+     */
+    ModeEnum: "choice" | "input" | "waiting" | "result" | "error";
     /**
      * @description * `available` - available
      *     * `degraded` - degraded
      * @enum {string}
      */
     ModelStatusEnum: "available" | "degraded";
+    NotificationBatch: {
+      cursor: string;
+      has_more: boolean;
+      results: components["schemas"]["ResultNotification"][];
+    };
     /** @enum {unknown} */
     NullEnum: null;
     Offer: {
@@ -2143,6 +2244,26 @@ export interface components {
      * @enum {string}
      */
     ReplyTypeEnum: "answer" | "missing_information" | "draft_suggestion";
+    ResultNotification: {
+      /** Format: uuid */
+      id: string;
+      /** Format: uuid */
+      application_id: string;
+      number: string;
+      kind: components["schemas"]["ResultNotificationKindEnum"];
+      /** Format: date-time */
+      created_at: string;
+    };
+    /**
+     * @description * `needs_info` - needs_info
+     *     * `approved` - approved
+     *     * `counteroffer` - counteroffer
+     *     * `rejected` - rejected
+     *     * `offered` - offered
+     * @enum {string}
+     */
+    ResultNotificationKindEnum:
+      "needs_info" | "approved" | "counteroffer" | "rejected" | "offered";
     Revision: {
       /** Format: uuid */
       readonly id: string;
@@ -2346,6 +2467,8 @@ export interface components {
     StaffApplicationList: {
       /** Format: uuid */
       readonly id: string;
+      /** Номер заявки */
+      readonly number: string;
       /** Format: uuid */
       readonly company: string;
       readonly company_name: string;
@@ -2368,8 +2491,6 @@ export interface components {
        * Format: date-time
        */
       readonly updated_at: string;
-      /** Номер заявки */
-      readonly number: string;
       readonly company_inn: string;
       /** Format: uuid */
       readonly current_revision_id: string | null;
@@ -2394,6 +2515,34 @@ export interface components {
        */
       readonly status_changed_at: string;
     };
+    /** @description Reject extra fields instead of silently dropping status/rate/role injection. */
+    StepActionRequest: {
+      expected_version: number;
+      /** Format: uuid */
+      step_id: string;
+      /** Format: uuid */
+      request_id: string;
+      action_id?: string;
+      text?: string;
+    };
+    StepChoice: {
+      id: string;
+      label: string;
+    };
+    StepInput: {
+      kind: components["schemas"]["StepInputKindEnum"];
+      label: string;
+      hint: string;
+      value: string;
+      max_length: number;
+    };
+    /**
+     * @description * `money` - money
+     *     * `months` - months
+     *     * `text` - text
+     * @enum {string}
+     */
+    StepInputKindEnum: "money" | "months" | "text";
     /**
      * @description * `client` - Представитель компании
      *     * `specialist` - Кредитный специалист
@@ -3855,6 +4004,73 @@ export interface operations {
       };
     };
   };
+  v1_applications_notifications_retrieve: {
+    parameters: {
+      query?: {
+        /** @description Указатель из предыдущего ответа. Без него возвращается только исходная отметка, без старых уведомлений. */
+        cursor?: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["NotificationBatch"];
+        };
+      };
+      /** @description Неверный JSON, поля или параметры. Исправьте форму. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Нет сессии, полномочий или корректного CSRF. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Ресурс не существует или скрыт company scope; также страница пагинации вне диапазона. */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Лимит запросов. Учитывайте Retry-After. */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description PostgreSQL временно недоступен или истёк таймаут блокировки. Проверьте карточку перед повтором значимого действия. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+    };
+  };
   v1_assistant_conversations_list: {
     parameters: {
       query?: {
@@ -4254,6 +4470,234 @@ export interface operations {
       };
       /** @description Ресурс не существует или скрыт company scope; также страница пагинации вне диапазона. */
       404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Лимит запросов. Учитывайте Retry-After. */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description PostgreSQL временно недоступен или истёк таймаут блокировки. Проверьте карточку перед повтором значимого действия. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+    };
+  };
+  v1_assistant_conversations_step_retrieve: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description A UUID string identifying this Диалог Савелия. */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AssistantStep"];
+        };
+      };
+      /** @description Неверный JSON, поля или параметры. Исправьте форму. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Нет сессии, полномочий или корректного CSRF. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Ресурс не существует или скрыт company scope; также страница пагинации вне диапазона. */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Лимит запросов. Учитывайте Retry-After. */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description PostgreSQL временно недоступен или истёк таймаут блокировки. Проверьте карточку перед повтором значимого действия. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+    };
+  };
+  v1_assistant_conversations_step_create: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description A UUID string identifying this Диалог Савелия. */
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["StepActionRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["StepActionRequest"];
+        "multipart/form-data": components["schemas"]["StepActionRequest"];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AssistantStep"];
+        };
+      };
+      /** @description Неверный JSON, поля или параметры. Исправьте форму. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Нет сессии, полномочий или корректного CSRF. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Ресурс не существует или скрыт company scope; также страница пагинации вне диапазона. */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Конфликт версии, назначения или состояния. GET карточки, проверка пользователем; не повторяйте действие автоматически. */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Лимит запросов. Учитывайте Retry-After. */
+      429: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description PostgreSQL временно недоступен или истёк таймаут блокировки. Проверьте карточку перед повтором значимого действия. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+    };
+  };
+  v1_assistant_conversations_current_create: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["CreateConversationRequest"];
+        "application/x-www-form-urlencoded": components["schemas"]["CreateConversationRequest"];
+        "multipart/form-data": components["schemas"]["CreateConversationRequest"];
+      };
+    };
+    responses: {
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["AssistantStep"];
+        };
+      };
+      /** @description Неверный JSON, поля или параметры. Исправьте форму. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Нет сессии, полномочий или корректного CSRF. */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Ресурс не существует или скрыт company scope; также страница пагинации вне диапазона. */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      /** @description Конфликт версии, назначения или состояния. GET карточки, проверка пользователем; не повторяйте действие автоматически. */
+      409: {
         headers: {
           [name: string]: unknown;
         };
